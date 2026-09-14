@@ -1,0 +1,66 @@
+.hero {
+  text-align: center;
+  padding: 36px 10px 10px;
+}
+
+.chamaGrande {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  margin: 0 auto 18px;
+}
+
+.titulo {
+  font-size: 28px;
+  margin: 0 0 8px;
+}
+
+.subtitulo {
+  color: var(--text-muted);
+  font-size: 15px;
+  margin: 0 0 30px;
+  line-height: 1.5;
+}
+
+.grade {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.cartaoPapel {
+  background: var(--bg-panel);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 24px 16px;
+  text-align: center;
+  cursor: pointer;
+}
+.cartaoPapel:hover {
+  border-color: var(--accent);
+}
+.cartaoPapel h3 {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+.cartaoPapel p {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.icone {
+  font-size: 26px;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 480px) {
+  .grade {
+    grid-template-columns: 1fr;
+  }
+}

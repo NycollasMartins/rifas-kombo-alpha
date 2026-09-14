@@ -1,0 +1,16 @@
+.cabecalho {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.nome {
+  font-size: 15px;
+}
+
+.contagem {
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}

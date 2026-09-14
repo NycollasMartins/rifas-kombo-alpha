@@ -1,0 +1,47 @@
+import { supabase } from '../supabase'
+import { verificar } from './erros'
+
+/** Ajustes do acampamento. Cada grupo tem os seus. */
+
+export const CONFIG_PADRAO = { precoRifa: 10, metaPadrao: 500, prazoFinal: '', premio: '' }
+
+export function mapearConfig(linha) {
+  if (!linha) return { ...CONFIG_PADRAO }
+  return {
+    grupo: linha.grupo,
+    precoRifa: Number(linha.preco_rifa) || 0,
+    metaPadrao: Number(linha.meta_padrao) || 0,
+    prazoFinal: linha.prazo_final || '',
+    premio: linha.premio || '',
+  }
+}
+
+/**
+ * O banco devolve só o que a pessoa pode ver: uma linha para líder e vendedor,
+ * as duas para o dev. Por isso vem indexado por grupo.
+ */
+export async function listarConfigs() {
+  const linhas = verificar(
+    await supabase.from('config').select('*'),
+    'Não foi possível carregar as configurações.'
+  )
+  const porGrupo = {}
+  linhas.forEach((linha) => {
+    porGrupo[linha.grupo] = mapearConfig(linha)
+  })
+  return porGrupo
+}
+
+export async function salvarConfig(grupo, mudancas) {
+  const linha = { updated_at: new Date().toISOString() }
+  if (mudancas.precoRifa !== undefined) linha.preco_rifa = mudancas.precoRifa
+  if (mudancas.metaPadrao !== undefined) linha.meta_padrao = mudancas.metaPadrao
+  if (mudancas.prazoFinal !== undefined) linha.prazo_final = mudancas.prazoFinal || null
+  if (mudancas.premio !== undefined) linha.premio = mudancas.premio || null
+
+  const salva = verificar(
+    await supabase.from('config').update(linha).eq('grupo', grupo).select().single(),
+    'Não foi possível salvar as configurações.'
+  )
+  return mapearConfig(salva)
+}

@@ -1,0 +1,35 @@
+.wrapper {
+  margin: 10px 0;
+}
+
+.trilho {
+  height: 9px;
+  background: var(--bg-panel-2);
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.preenchimento {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 20px;
+  transition: width 0.3s;
+}
+
+/* na Kombo Alpha, o preenchimento usa o gradiente da marca —
+   reservado para elementos gráficos, não para texto/botões */
+:global(html[data-grupo='Alpha']) .preenchimento:not(.completo) {
+  background: var(--alpha-gradient);
+}
+
+.completo {
+  background: var(--good);
+}
+
+.legenda {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}

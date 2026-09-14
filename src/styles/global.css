@@ -1,0 +1,321 @@
+/* ============================================================
+   Reset + o "kit de peças" compartilhado por várias telas:
+   botões, campos de formulário, cartões, etiquetas, listas.
+   O layout específico de cada tela mora no .module.css dela.
+   ============================================================ */
+
+@import './tokens.css';
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  /* sem isso no <html>, o "elástico" de rolar além do topo/fim da página
+     (celular, ou trackpad no Mac) mostra branco por baixo — o fundo
+     precisa estar nos dois, não só no body */
+  background: var(--bg) fixed;
+}
+
+body {
+  color: var(--text);
+  font-family: var(--font-texto);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+.display {
+  font-family: var(--font-titulo);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input,
+select {
+  font-family: inherit;
+}
+
+#root {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px 16px 60px;
+}
+
+/* ---------------- botões ---------------- */
+.btn {
+  border: 1.5px solid var(--line);
+  background: var(--bg-panel-2);
+  color: var(--text);
+  padding: 12px 18px;
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 600;
+  transition: background 0.15s, transform 0.1s, border-color 0.15s;
+}
+.btn:hover {
+  background: var(--bg-raised);
+  border-color: var(--text-dim);
+}
+.btn:active {
+  transform: scale(0.98);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.btn-ghost {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 600;
+}
+.btn-ghost:hover {
+  background: var(--bg-panel-2);
+  color: var(--text);
+}
+
+.btn-danger {
+  color: var(--bad);
+}
+.btn-block {
+  width: 100%;
+}
+.btn-sm {
+  padding: 7px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+/* ---------------- campos ---------------- */
+.field {
+  margin-bottom: 14px;
+}
+.field label {
+  display: block;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.field input,
+.field select {
+  width: 100%;
+  background: var(--bg-panel-2);
+  border: 1.5px solid var(--line);
+  color: var(--text);
+  padding: 11px 12px;
+  border-radius: var(--radius);
+  font-size: 15px;
+}
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.field-row {
+  display: flex;
+  gap: 10px;
+}
+.field-row .field {
+  flex: 1;
+}
+
+/* ---------------- cartão ---------------- */
+.card {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  margin-bottom: 16px;
+}
+.card h2 {
+  font-size: 17px;
+  margin: 0 0 14px;
+}
+
+/* ---------------- etiquetas ---------------- */
+.tag {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  color: var(--text-muted);
+}
+.tag-good {
+  background: var(--good-dark);
+  color: var(--good);
+  border-color: transparent;
+}
+.tag-warn {
+  background: var(--accent-dark);
+  color: var(--accent);
+  border-color: transparent;
+}
+.tag-bad {
+  background: var(--bad-dark);
+  color: var(--bad);
+  border-color: transparent;
+}
+
+/* ---------------- listas e seções ---------------- */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 10px;
+}
+.section-head h2 {
+  font-size: 17px;
+  margin: 0;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.list-row:last-child {
+  border-bottom: none;
+}
+.list-row .info {
+  min-width: 0;
+}
+.list-row .info strong {
+  display: block;
+  font-size: 14.5px;
+}
+.list-row .info span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.list-row .actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.divider {
+  height: 1px;
+  background: var(--line);
+  margin: 18px 0;
+  border: none;
+}
+
+/* ---------------- filtros ---------------- */
+.filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.filters select,
+.filters input {
+  background: var(--bg-panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.filters input {
+  flex: 1;
+  min-width: 140px;
+}
+
+/* ---------------- avisos ---------------- */
+.error-text {
+  color: var(--bad);
+  font-size: 12.5px;
+  margin-top: 4px;
+}
+.center-note {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 16px;
+}
+.loading-wrap {
+  padding: 80px 16px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.texto-ajuda {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: -6px 0 14px;
+}
+
+/* ---------------- entrada e login ---------------- */
+.rotulo-solto {
+  display: block;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.linha-de-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.rotulo-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  margin: -2px 0 14px;
+  cursor: pointer;
+}
+.rotulo-checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.lista-ajuda {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  padding-left: 18px;
+  margin: 0 0 16px;
+}
+.lista-ajuda strong {
+  color: var(--text);
+}

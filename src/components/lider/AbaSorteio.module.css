@@ -1,0 +1,41 @@
+.caixa {
+  text-align: center;
+  padding: 30px 16px;
+}
+
+.visor {
+  font-family: var(--font-titulo);
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--accent);
+  min-height: 44px;
+  margin-bottom: 14px;
+}
+
+.cartaoGanhador {
+  background: var(--accent-dark);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  text-align: center;
+  margin-top: 14px;
+}
+
+.numeroGanhador {
+  font-family: var(--font-titulo);
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.nomeGanhador {
+  font-size: 17px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+
+.detalheGanhador {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}

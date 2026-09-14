@@ -1,0 +1,128 @@
+.destaques {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.destaque {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+.numeroGrande {
+  font-family: var(--font-titulo);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.acentuado .numeroGrande {
+  color: var(--accent);
+}
+
+.rotulo {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+
+.linhaMetricas {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.metrica {
+  background: var(--bg-panel-2);
+  border-radius: var(--radius);
+  padding: 13px;
+}
+
+.numero {
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.rotuloPequeno {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+@media (max-width: 480px) {
+  .destaques {
+    grid-template-columns: 1fr;
+  }
+  .linhaMetricas {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ---- faixa do prazo final ---- */
+.prazo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 11px 14px;
+  margin-bottom: 16px;
+  font-size: 13.5px;
+}
+.prazo span {
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+.prazoVencido {
+  background: var(--accent-dark);
+  border-color: var(--accent);
+}
+.prazoVencido strong {
+  color: var(--accent);
+}
+
+/* ---- dinheiro de quem desistiu ---- */
+.igreja {
+  background: var(--good-dark);
+  border: 1px solid var(--good);
+  border-radius: var(--radius);
+  padding: 13px 15px;
+  margin-bottom: 16px;
+}
+.igreja strong {
+  display: block;
+}
+.igreja strong {
+  display: block;
+  font-family: var(--font-titulo);
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--good);
+}
+.igreja span {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+/* ---- coluna do quanto falta ---- */
+.deve {
+  text-align: right;
+  flex-shrink: 0;
+}
+.deve strong {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--accent);
+}
+.deve span {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}

@@ -1,0 +1,47 @@
+.barra {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  margin-bottom: 16px;
+}
+
+.rotulo {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.botoes {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+}
+
+.botao {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1.5px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.botao[data-grupo-cor='Alpha'].ativo {
+  background: var(--alpha-bg);
+  border-color: var(--alpha-accent);
+  color: var(--alpha-accent);
+}
+
+.botao[data-grupo-cor='Kombo'].ativo {
+  background: var(--kb-primary);
+  border-color: var(--kb-accent);
+  color: var(--kb-accent);
+}

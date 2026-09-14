@@ -1,0 +1,73 @@
+.fundo {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 15, 13, 0.7);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 50;
+}
+
+.caixa {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 18px 18px 0 0;
+  padding: 22px 20px 26px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+.titulo {
+  font-size: 18px;
+  margin: 0 0 16px;
+}
+
+/* cabeçalho com o × — usado quando a janela só fecha ali */
+.cabecalho {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.tituloDoCabecalho {
+  font-size: 18px;
+  margin: 0;
+  font-family: var(--font-titulo);
+}
+
+.fechar {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 26px;
+  line-height: 1;
+  padding: 0 4px;
+  margin: -4px -4px 0 0;
+  flex-shrink: 0;
+}
+.fechar:hover {
+  color: var(--text);
+}
+
+.acoes {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.acoes > :global(.btn) {
+  flex: 1;
+}
+
+@media (min-width: 600px) {
+  .fundo {
+    align-items: center;
+  }
+  .caixa {
+    border-radius: 18px;
+  }
+}

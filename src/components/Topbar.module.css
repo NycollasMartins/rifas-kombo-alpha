@@ -1,0 +1,52 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 0 20px;
+  margin-bottom: 8px;
+}
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+/* o selo repete a logo: círculo na cor forte, letras em amarelo */
+.selo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--grupo-forte);
+  color: var(--grupo-contraste);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-titulo);
+  font-size: 15px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.textos {
+  min-width: 0;
+}
+
+.titulo {
+  font-size: 19px;
+  margin: 0;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subtitulo {
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

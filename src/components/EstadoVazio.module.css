@@ -1,0 +1,15 @@
+.vazio {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--text-muted);
+}
+
+.icone {
+  font-size: 30px;
+  margin-bottom: 10px;
+}
+
+.vazio p {
+  font-size: 14px;
+  margin: 4px 0;
+}

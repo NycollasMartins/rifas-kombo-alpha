@@ -1,0 +1,181 @@
+/* ============================================================
+   Cores e tipografia.
+
+   O app tem três peles:
+     sem grupo  -> tela de entrada, neutro escuro e quente
+     Alpha      -> "Kombo Alpha" — dark mode neon, gamer/jovem
+     Kombo      -> "Kombo KB"    — pop art clássico, vibrante
+
+   Cada marca tem as SUAS variáveis cruas (--alpha-* e --kb-*),
+   isoladas uma da outra. Os componentes nunca leem essas
+   variáveis cruas diretamente: eles usam sempre os tokens
+   semânticos (--bg, --accent, --text...), remapeados aqui
+   dentro de cada pele. Assim nenhum componente mistura as duas
+   marcas — ele só enxerga a pele ativa.
+
+   O fundo (--bg) é sempre um gradiente, nunca uma cor chapada:
+   é o que dá profundidade em vez de parecer um retângulo pintado
+   de preto. Só é usado uma vez, no <body> (ver global.css) — os
+   cartões e campos continuam sólidos, para não brigar com o
+   texto.
+
+   Quem troca a pele é aplicarTemaDoGrupo(), em utils/grupos.js,
+   escrevendo data-grupo no <html>.
+   ============================================================ */
+
+:root {
+  /* -------- KOMBO ALPHA — marca crua (dark neon / gamer) -------- */
+  --alpha-bg: #0d0d0d;
+  --alpha-accent: #b4ff39; /* verde-limão neon */
+  --alpha-secondary: #7c3aed; /* roxo/violeta */
+  --alpha-gradient-start: #ec1e79; /* magenta */
+  --alpha-gradient-end: #ff7a00; /* laranja */
+  --alpha-tertiary: #17a398; /* verde-água/teal */
+  --alpha-text: #ffffff;
+  --alpha-gradient: linear-gradient(135deg, var(--alpha-gradient-start), var(--alpha-gradient-end));
+
+  /* -------- KOMBO KB — marca crua (pop art clássico) -------- */
+  --kb-primary: #1d2e6e; /* azul royal */
+  --kb-accent: #f5c518; /* amarelo/dourado */
+  --kb-secondary: #e63329; /* vermelho */
+  --kb-bg: #0a0a0a; /* preto — só existe como referência da marca, nunca vira tela inteira */
+  --kb-text: #ffffff;
+
+  /* -------- tokens semânticos: pele neutra (sem grupo) -------- */
+  --bg: radial-gradient(ellipse 1100px 750px at 50% -12%, #2b241f 0%, #1a1613 46%, #100e0c 100%);
+  --bg-panel: #1e1a17;
+  --bg-panel-2: #262019;
+  --bg-raised: #332b22;
+
+  --line: #3c342a;
+  --line-soft: #28221c;
+
+  --text: #f7f3ec;
+  --text-muted: #ab9f92;
+  --text-dim: #797064;
+
+  --accent: #e8a33d;
+  --accent-hover: #f0b25a;
+  --accent-dark: #4a3418;
+  --accent-text: #201404;
+
+  --good: #7cd3a0;
+  --good-dark: #16352a;
+  --bad: #e6584a;
+  --bad-dark: #3a1f1a;
+
+  --grupo-forte: #332b22;
+  --grupo-contraste: #e8a33d;
+
+  /* fontes: nada de Inter/Roboto/Manrope/system-ui — texto sempre em Plex
+     Sans, e cada marca ganha uma fonte de título própria (ver abaixo) */
+  --font-titulo: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-texto: 'IBM Plex Sans', system-ui, sans-serif;
+
+  /* cantos */
+  --radius: 10px;
+  --radius-lg: 16px;
+}
+
+/* ================================================================
+   KOMBO ALPHA — dark mode neon: fundo carvão com um brilho violeta
+   no topo (nunca preto liso), destaque verde-limão. O roxo e o
+   gradiente magenta→laranja ficam em elementos gráficos (barra de
+   progresso), não em texto/fundo. Títulos em mono, estilo HUD.
+   ================================================================ */
+:root[data-grupo='Alpha'] {
+  --bg: radial-gradient(ellipse 1100px 750px at 18% -12%, #2c2140 0%, #180f24 46%, #100b17 100%);
+  --bg-panel: #1c1728;
+  --bg-panel-2: #241d33;
+  --bg-raised: #2f2640;
+
+  --line: #3c3252;
+  --line-soft: #2a2338;
+
+  --text: var(--alpha-text);
+  --text-muted: #c2b8d6;
+  --text-dim: #8b7fa3;
+
+  --accent: var(--alpha-accent);
+  --accent-hover: #c9ff66;
+  --accent-dark: #2a3a12;
+  --accent-text: #0d0d0d;
+
+  --good: var(--alpha-tertiary);
+  --good-dark: #17332e;
+
+  /* magenta da marca, um pouco mais claro para garantir contraste em
+     texto pequeno — o --alpha-gradient-start original é para gráficos */
+  --bad: #ff3d8f;
+  --bad-dark: #3a1330;
+
+  --grupo-forte: #150f1f;
+  --grupo-contraste: var(--alpha-accent);
+
+  --font-titulo: 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* cantos mais arredondados, "tech/gamer" */
+  --radius: 12px;
+  --radius-lg: 20px;
+}
+
+/* títulos em mono ganham uma respiradinha extra entre as letras —
+   lê como HUD/terminal, não como texto corrido */
+:root[data-grupo='Alpha'] h1,
+:root[data-grupo='Alpha'] h2,
+:root[data-grupo='Alpha'] h3,
+:root[data-grupo='Alpha'] .display {
+  letter-spacing: 0.02em;
+}
+
+/* ================================================================
+   KOMBO KB — pop art clássico: fundo com o azul royal da marca
+   vazando do canto (nunca preto liso), superfícies em azul royal
+   sólido, destaque amarelo/dourado, vermelho como alerta. Títulos
+   em caixa alta num pôster de quadrinho.
+   ================================================================ */
+:root[data-grupo='Kombo'] {
+  --bg: radial-gradient(ellipse 1100px 750px at 82% -12%, #2a3f8f 0%, #16214f 46%, #0a0f24 100%);
+  --bg-panel: var(--kb-primary);
+  --bg-panel-2: #182759;
+  --bg-raised: #2c4090;
+
+  --line: #3b4fa0;
+  --line-soft: #223368;
+
+  --text: var(--kb-text);
+  --text-muted: #b7c1e8;
+  --text-dim: #7c88bb;
+
+  --accent: var(--kb-accent);
+  --accent-hover: #ffd84d;
+  --accent-dark: #3a2d08;
+  --accent-text: var(--kb-bg);
+
+  --good: #3ddc84;
+  --good-dark: #123521;
+
+  --bad: var(--kb-secondary);
+  --bad-dark: #34110d;
+
+  --grupo-forte: var(--kb-primary);
+  --grupo-contraste: var(--kb-accent);
+
+  --font-titulo: 'Anton', sans-serif;
+
+  /* cantos mais quadrados, "pôster/quadrinho" */
+  --radius: 8px;
+  --radius-lg: 14px;
+}
+
+/* Anton só existe em um peso — a caixa alta é o que faz o efeito de
+   pôster funcionar, então fixa o peso pra não sintetizar um "bold" em
+   cima dele */
+:root[data-grupo='Kombo'] h1,
+:root[data-grupo='Kombo'] h2,
+:root[data-grupo='Kombo'] h3,
+:root[data-grupo='Kombo'] .display {
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  font-weight: 400;
+}
