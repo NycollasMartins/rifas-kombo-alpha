@@ -132,6 +132,7 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
               grupo,
               pagamentoPendente: status === 'pendente',
               premio: config.premio,
+              dataSorteio: config.dataSorteio,
             })}
           />
         </div>

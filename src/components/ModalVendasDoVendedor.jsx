@@ -97,6 +97,7 @@ export default function ModalVendasDoVendedor({ vendedor, aoFechar }) {
                       grupo: vendedor.grupo,
                       pagamentoPendente: v.status === 'pendente',
                       premio: config.premio,
+                      dataSorteio: config.dataSorteio,
                     })}
                     compacto
                   />

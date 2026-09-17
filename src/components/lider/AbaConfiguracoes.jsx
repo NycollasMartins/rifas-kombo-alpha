@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
 import { useSessao } from '../../hooks/useSessao'
 import { definirCodigoDeLider } from '../../lib/db/entrada'
+import { notificarVendedores } from '../../lib/db/notificacoes'
+import { formatarPrazo } from '../../utils/prazo'
 import { infoDoGrupo } from '../../utils/grupos'
 import { traduzirErro } from '../../lib/db/erros'
 
@@ -15,6 +17,8 @@ export default function AbaConfiguracoes() {
   const [metaPadrao, setMetaPadrao] = useState(String(config.metaPadrao))
   const [prazoFinal, setPrazoFinal] = useState(config.prazoFinal || '')
   const [premio, setPremio] = useState(config.premio || '')
+  const [dataSorteio, setDataSorteio] = useState(config.dataSorteio || '')
+  const [primeiroAcerto, setPrimeiroAcerto] = useState(config.primeiroAcerto || '')
   const [codigo, setCodigo] = useState('')
   const [novaSenha, setNovaSenha] = useState('')
   const [recados, setRecados] = useState({})
@@ -92,7 +96,7 @@ export default function AbaConfiguracoes() {
       </div>
 
       <div className="card">
-        <h2>Prêmio do sorteio</h2>
+        <h2>Prêmio e data do sorteio</h2>
         <p className="texto-ajuda">
           Aparece na mensagem que o comprador recebe pelo WhatsApp, avisando o que ele está
           concorrendo. Vale só para o {nomeDoGrupo}.
@@ -106,14 +110,65 @@ export default function AbaConfiguracoes() {
             onChange={(e) => setPremio(e.target.value)}
           />
         </div>
+        <div className="field">
+          <label htmlFor="cfg-sorteio">Data do sorteio</label>
+          <input
+            id="cfg-sorteio"
+            type="date"
+            value={dataSorteio}
+            onChange={(e) => setDataSorteio(e.target.value)}
+          />
+        </div>
+        <p className="texto-ajuda">
+          Também entra na mensagem do comprador. Deixe em branco se ainda não tiver data.
+        </p>
         <Recado cartao="premio" />
         <button
           className="btn btn-primary"
           onClick={() =>
-            tentar('premio', () => salvarAjustes({ premio: premio.trim() }), 'Salvo.')
+            tentar(
+              'premio',
+              () => salvarAjustes({ premio: premio.trim(), dataSorteio }),
+              'Salvo.'
+            )
           }
         >
-          Salvar prêmio
+          Salvar
+        </button>
+      </div>
+
+      <div className="card">
+        <h2>Primeiro acerto</h2>
+        <p className="texto-ajuda">
+          A data do primeiro encontro para acertar as contas com os vendedores. Some do vendedor
+          quando o dia passa.
+        </p>
+        <div className="field">
+          <label htmlFor="cfg-acerto">Data do primeiro acerto</label>
+          <input
+            id="cfg-acerto"
+            type="date"
+            value={primeiroAcerto}
+            onChange={(e) => setPrimeiroAcerto(e.target.value)}
+          />
+        </div>
+        <Recado cartao="acerto" />
+        <button
+          className="btn btn-primary"
+          onClick={() =>
+            tentar('acerto', async () => {
+              await salvarAjustes({ primeiroAcerto })
+              if (primeiroAcerto) {
+                notificarVendedores(
+                  grupo,
+                  'Primeiro acerto marcado',
+                  `O primeiro acerto do ${nomeDoGrupo} é dia ${formatarPrazo(primeiroAcerto)}.`
+                )
+              }
+            }, primeiroAcerto ? 'Salvo.' : 'Removido.')
+          }
+        >
+          Salvar primeiro acerto
         </button>
       </div>
 
@@ -136,7 +191,16 @@ export default function AbaConfiguracoes() {
         <button
           className="btn btn-primary"
           onClick={() =>
-            tentar('prazo', () => salvarAjustes({ prazoFinal }), prazoFinal ? 'Prazo salvo.' : 'Prazo removido.')
+            tentar('prazo', async () => {
+              await salvarAjustes({ prazoFinal })
+              if (prazoFinal) {
+                notificarVendedores(
+                  grupo,
+                  'Prazo final marcado',
+                  `O prazo final de vendas do ${nomeDoGrupo} é dia ${formatarPrazo(prazoFinal)}.`
+                )
+              }
+            }, prazoFinal ? 'Prazo salvo.' : 'Prazo removido.')
           }
         >
           Salvar prazo

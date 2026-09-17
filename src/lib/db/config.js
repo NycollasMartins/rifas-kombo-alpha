@@ -3,7 +3,14 @@ import { verificar } from './erros'
 
 /** Ajustes do acampamento. Cada grupo tem os seus. */
 
-export const CONFIG_PADRAO = { precoRifa: 10, metaPadrao: 500, prazoFinal: '', premio: '' }
+export const CONFIG_PADRAO = {
+  precoRifa: 10,
+  metaPadrao: 500,
+  prazoFinal: '',
+  premio: '',
+  dataSorteio: '',
+  primeiroAcerto: '',
+}
 
 export function mapearConfig(linha) {
   if (!linha) return { ...CONFIG_PADRAO }
@@ -13,6 +20,8 @@ export function mapearConfig(linha) {
     metaPadrao: Number(linha.meta_padrao) || 0,
     prazoFinal: linha.prazo_final || '',
     premio: linha.premio || '',
+    dataSorteio: linha.data_sorteio || '',
+    primeiroAcerto: linha.primeiro_acerto || '',
   }
 }
 
@@ -38,6 +47,8 @@ export async function salvarConfig(grupo, mudancas) {
   if (mudancas.metaPadrao !== undefined) linha.meta_padrao = mudancas.metaPadrao
   if (mudancas.prazoFinal !== undefined) linha.prazo_final = mudancas.prazoFinal || null
   if (mudancas.premio !== undefined) linha.premio = mudancas.premio || null
+  if (mudancas.dataSorteio !== undefined) linha.data_sorteio = mudancas.dataSorteio || null
+  if (mudancas.primeiroAcerto !== undefined) linha.primeiro_acerto = mudancas.primeiroAcerto || null
 
   const salva = verificar(
     await supabase.from('config').update(linha).eq('grupo', grupo).select().single(),

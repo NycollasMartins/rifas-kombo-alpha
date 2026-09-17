@@ -42,6 +42,7 @@ export function montarMensagemDaCompra({
   grupo,
   pagamentoPendente,
   premio,
+  dataSorteio,
 }) {
   const primeiroNome = String(comprador || '').trim().split(/\s+/)[0] || 'Olá'
   const lista = numeros
@@ -71,7 +72,9 @@ export function montarMensagemDaCompra({
 
   linhas.push(
     '',
-    `Guarde esses números: o sorteio é entre as rifas pagas.`,
+    dataSorteio
+      ? `Guarde esses números: o sorteio é dia ${formatarPrazo(dataSorteio)}, entre as rifas pagas.`
+      : `Guarde esses números: o sorteio é entre as rifas pagas.`,
     nomeDoVendedor ? `Qualquer coisa é só me chamar. — ${nomeDoVendedor}` : '',
     '',
     'Obrigado por ajudar! 🙏'

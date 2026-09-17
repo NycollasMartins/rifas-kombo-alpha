@@ -52,3 +52,36 @@ export function registrarServiceWorker() {
     })
   })
 }
+
+/**
+ * Notificação de verdade (Web Push), na barra do celular.
+ *
+ * No Android funciona mesmo sem instalar. No iPhone só funciona depois de
+ * instalado na tela de início — a Apple não libera push pra aba do Safari.
+ */
+export function suportaPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false
+  // só depois de instalado: no iPhone é exigência da Apple, e nos outros
+  // aparelhos evita competir com o cartão de instalar no mesmo cantinho
+  return jaEstaInstalado()
+}
+
+function base64ParaUint8Array(base64) {
+  const padding = '='.repeat((4 - (base64.length % 4)) % 4)
+  const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const bruto = atob(b64)
+  return Uint8Array.from([...bruto].map((c) => c.charCodeAt(0)))
+}
+
+/** Pede permissão e inscreve o navegador. Devolve a inscrição (ou lança erro). */
+export async function inscreverPush(chavePublicaVapid) {
+  const permissao = await Notification.requestPermission()
+  if (permissao !== 'granted') throw new Error('Permissão de notificação negada.')
+
+  const registro = await navigator.serviceWorker.ready
+  const inscricao = await registro.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: base64ParaUint8Array(chavePublicaVapid),
+  })
+  return inscricao.toJSON()
+}

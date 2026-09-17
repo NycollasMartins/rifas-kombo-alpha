@@ -5,6 +5,7 @@ import AbaPainel from './lider/AbaPainel'
 import AbaVendas from './lider/AbaVendas'
 import AbaVendedores from './lider/AbaVendedores'
 import AbaSorteio from './lider/AbaSorteio'
+import AbaUsuarios from './lider/AbaUsuarios'
 import AbaConfiguracoes from './lider/AbaConfiguracoes'
 import AbaManutencao from './lider/AbaManutencao'
 import { useSessao } from '../hooks/useSessao'
@@ -16,6 +17,7 @@ const ABAS = [
   { chave: 'vendas', rotulo: 'Vendas', Componente: AbaVendas },
   { chave: 'vendedores', rotulo: 'Vendedores', Componente: AbaVendedores },
   { chave: 'sorteio', rotulo: 'Sorteio', Componente: AbaSorteio },
+  { chave: 'usuarios', rotulo: 'Usuários', Componente: AbaUsuarios },
   { chave: 'config', rotulo: 'Configurações', Componente: AbaConfiguracoes },
 ]
 

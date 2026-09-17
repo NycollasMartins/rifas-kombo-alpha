@@ -77,6 +77,7 @@ export default function CompraDoVendedor({ lote, precoRifa, nomeDoVendedor, grup
             grupo,
             pagamentoPendente: v.status === 'pendente',
             premio: config.premio,
+            dataSorteio: config.dataSorteio,
           })}
           compacto
         />

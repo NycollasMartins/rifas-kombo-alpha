@@ -14,3 +14,20 @@
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (evento) => evento.waitUntil(self.clients.claim()))
 self.addEventListener('fetch', (evento) => evento.respondWith(fetch(evento.request)))
+
+// notificação de verdade, na barra do celular (Web Push)
+self.addEventListener('push', (evento) => {
+  const dados = evento.data ? evento.data.json() : {}
+  evento.waitUntil(
+    self.registration.showNotification(dados.titulo || 'Rifas do acampamento', {
+      body: dados.corpo || '',
+      icon: '/icone-192.png',
+      badge: '/icone-192.png',
+    })
+  )
+})
+
+self.addEventListener('notificationclick', (evento) => {
+  evento.notification.close()
+  evento.waitUntil(self.clients.openWindow('/'))
+})

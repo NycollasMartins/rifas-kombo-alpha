@@ -122,12 +122,16 @@ create table if not exists public.config (
   meta_padrao numeric(10, 2) not null default 500,
   prazo_final date,
   premio      text,
+  data_sorteio     date,
+  primeiro_acerto  date,
   updated_at  timestamptz not null default now()
 );
 
 insert into public.config (grupo) values ('Alpha'), ('Kombo') on conflict (grupo) do nothing;
 
 alter table public.config add column if not exists premio text;
+alter table public.config add column if not exists data_sorteio date;
+alter table public.config add column if not exists primeiro_acerto date;
 
 -- ---- codigos_acesso: a senha para virar líder de um grupo ------------------
 --  Guardado como hash e SEM permissão de leitura para ninguém: só as funções
@@ -210,6 +214,18 @@ create table if not exists public.vendas (
 create index if not exists vendas_vendedor_idx on public.vendas (vendedor_id);
 create index if not exists vendas_grupo_idx    on public.vendas (grupo);
 create index if not exists vendas_lote_idx     on public.vendas (lote_id);
+
+-- ---- inscricoes_push: notificação de verdade, na barra do celular ---------
+create table if not exists public.inscricoes_push (
+  id           uuid primary key default gen_random_uuid(),
+  vendedor_id  uuid not null references public.vendedores (id) on delete cascade,
+  endpoint     text not null unique,
+  p256dh       text not null,
+  auth         text not null,
+  criado_em    timestamptz not null default now()
+);
+
+create index if not exists inscricoes_push_vendedor_idx on public.inscricoes_push (vendedor_id);
 
 -- ---- sorteios ---------------------------------------------------------------
 create table if not exists public.sorteios (
@@ -639,6 +655,7 @@ alter table public.vendedores          enable row level security;
 alter table public.vendedores_privado  enable row level security;
 alter table public.vendas              enable row level security;
 alter table public.sorteios            enable row level security;
+alter table public.inscricoes_push     enable row level security;
 
 -- ---- config ----------------------------------------------------------------
 drop policy if exists "config: só o meu grupo" on public.config;
@@ -740,6 +757,14 @@ create policy "vendas: a liderança exclui"
   on public.vendas for delete to authenticated
   using (public.e_lider() and public.posso_ver(grupo));
 
+-- ---- inscricoes_push: só o próprio vendedor mexe na própria ----------------
+--  A Edge Function que dispara o envio usa a service_role e ignora RLS.
+drop policy if exists "push: o vendedor cuida da própria" on public.inscricoes_push;
+create policy "push: o vendedor cuida da própria"
+  on public.inscricoes_push for all to authenticated
+  using (vendedor_id = public.meu_vendedor_id())
+  with check (vendedor_id = public.meu_vendedor_id());
+
 -- ---- sorteios ---------------------------------------------------------------
 drop policy if exists "sorteios: só o meu grupo" on public.sorteios;
 create policy "sorteios: só o meu grupo"
@@ -761,11 +786,12 @@ create policy "sorteios: a liderança sorteia"
 grant usage on schema public to anon, authenticated;
 
 revoke all on public.config, public.codigos_acesso, public.perfis, public.vendedores,
-              public.vendedores_privado, public.vendas, public.sorteios
+              public.vendedores_privado, public.vendas, public.sorteios, public.inscricoes_push
   from anon, authenticated;
 
 grant select on public.config, public.vendedores, public.vendas, public.sorteios, public.perfis
   to authenticated;
+grant select, insert, delete on public.inscricoes_push to authenticated;
 
 grant update                 on public.config             to authenticated;
 grant insert, update, delete on public.vendedores         to authenticated;
