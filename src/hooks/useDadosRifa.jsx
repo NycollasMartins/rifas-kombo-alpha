@@ -11,6 +11,7 @@ import {
 import {
   atualizarRepasseVenda,
   atualizarStatusVenda,
+  completarLote,
   corrigirVenda,
   excluirVenda,
   listarVendas,
@@ -212,6 +213,13 @@ export function ProvedorDadosRifa({ children }) {
       async mudarRepasseVenda(id, repasse) {
         const atualizada = await atualizarRepasseVenda(id, repasse)
         setTodasVendas((a) => mesclar(a, atualizada))
+      },
+
+      /** O vendedor completa a própria compra: status e/ou comprovante. */
+      async completarCompra(loteId, dados) {
+        const atualizadas = await completarLote(loteId, dados)
+        setTodasVendas((atual) => atualizadas.reduce(mesclar, atual))
+        return atualizadas
       },
 
       async removerVenda(id) {

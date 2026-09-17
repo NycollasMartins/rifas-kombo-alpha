@@ -65,6 +65,24 @@ export async function atualizarStatusVenda(id, status) {
   return mapearVenda(linha)
 }
 
+/**
+ * Completa uma compra que ficou incompleta: marca como pago/pendente e/ou
+ * anexa o comprovante que faltava. Atualiza TODAS as rifas do lote de uma
+ * vez, porque elas compartilham o mesmo status e comprovante — foram
+ * registradas juntas, na mesma compra.
+ */
+export async function completarLote(loteId, { status, comprovantePath }) {
+  const mudancas = {}
+  if (status !== undefined) mudancas.status = status
+  if (comprovantePath !== undefined) mudancas.comprovante_path = comprovantePath
+
+  const linhas = verificar(
+    await supabase.from('vendas').update(mudancas).eq('lote_id', loteId).select(),
+    'Não foi possível salvar as alterações desta compra.'
+  )
+  return linhas.map(mapearVenda)
+}
+
 export async function atualizarRepasseVenda(id, repasse) {
   const linha = verificar(
     await supabase.from('vendas').update({ repasse }).eq('id', id).select().single(),

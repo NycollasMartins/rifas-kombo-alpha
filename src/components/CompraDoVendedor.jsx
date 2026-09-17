@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import EtiquetaStatus from './EtiquetaStatus'
 import BotoesDoWhatsapp from './BotoesDoWhatsapp'
+import ModalCompletarVenda from './ModalCompletarVenda'
 import { useDadosRifa } from '../hooks/useDadosRifa'
 import { montarMensagemDaCompra } from '../utils/whatsapp'
 import {
@@ -21,8 +23,16 @@ import estilos from './CompraDoVendedor.module.css'
  */
 export default function CompraDoVendedor({ lote, precoRifa, nomeDoVendedor, grupo }) {
   const { config } = useDadosRifa()
+  const [completando, setCompletando] = useState(false)
   const v = lote.primeira
   const valor = lote.rifas.length * precoRifa
+
+  // falta marcar como pago, ou é Pix sem comprovante — e o repasse ainda não
+  // começou a ser conferido pela liderança (regra que o banco também aplica)
+  const faltaCompletar =
+    v.origem !== 'propria' &&
+    v.repasse === 'pendente' &&
+    (v.status === 'pendente' || (v.pagamento === 'pix' && !v.comprovantePath))
 
   return (
     <div className={estilos.compra}>
@@ -69,6 +79,26 @@ export default function CompraDoVendedor({ lote, precoRifa, nomeDoVendedor, grup
             premio: config.premio,
           })}
           compacto
+        />
+      )}
+
+      {faltaCompletar && (
+        <button
+          type="button"
+          className="btn btn-sm"
+          style={{ marginTop: 8 }}
+          onClick={() => setCompletando(true)}
+        >
+          Editar
+        </button>
+      )}
+
+      {completando && (
+        <ModalCompletarVenda
+          lote={lote}
+          precoRifa={precoRifa}
+          grupo={grupo}
+          aoFechar={() => setCompletando(false)}
         />
       )}
     </div>

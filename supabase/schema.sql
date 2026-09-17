@@ -410,7 +410,12 @@ create trigger vendas_definir_grupo_e_numero
   before insert on public.vendas
   for each row execute function public.definir_grupo_e_numero();
 
-/** O líder mexe em status e repasse. Corrigir o resto é só do dev. */
+/**
+ * O líder mexe em status e repasse. O vendedor completa status e comprovante
+ * só da própria venda (ver política "vendas: o vendedor completa a
+ * própria"), e só antes do repasse começar a ser conferido — depois disso
+ * quem manda nesse dado é a liderança. Corrigir o resto é só do dev.
+ */
 create or replace function public.proteger_colunas_da_venda()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
@@ -428,6 +433,10 @@ begin
   or new.data        is distinct from old.data then
     raise exception 'Só o dev pode corrigir os dados de uma venda já registrada.'
       using hint = 'O líder pode mudar o status (pago/pendente) e o repasse.';
+  end if;
+
+  if not public.e_lider() and new.repasse is distinct from old.repasse then
+    raise exception 'Só a liderança pode mudar o repasse.';
   end if;
 
   return new;
@@ -711,6 +720,20 @@ create policy "vendas: a liderança edita"
   on public.vendas for update to authenticated
   using (public.e_lider() and public.posso_ver(grupo))
   with check (public.e_lider() and public.posso_ver(grupo));
+
+/**
+ * O vendedor completa a própria venda quando esqueceu de marcar como pago
+ * ou de anexar o comprovante do Pix — só enquanto o repasse ainda não
+ * começou a ser conferido pela liderança (repasse = 'pendente'). O gatilho
+ * "vendas_proteger_colunas" garante que só status e comprovante mudam de
+ * verdade; o resto (número, comprador, valor...) fica travado mesmo se
+ * alguém tentar forçar pela API.
+ */
+drop policy if exists "vendas: o vendedor completa a própria" on public.vendas;
+create policy "vendas: o vendedor completa a própria"
+  on public.vendas for update to authenticated
+  using (vendedor_id = public.meu_vendedor_id() and repasse = 'pendente')
+  with check (vendedor_id = public.meu_vendedor_id());
 
 drop policy if exists "vendas: a liderança exclui" on public.vendas;
 create policy "vendas: a liderança exclui"
