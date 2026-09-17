@@ -209,17 +209,28 @@ O que ele mostra muda conforme o aparelho:
 | Android, sem o botão disponível | *"No menu do navegador (⋮), toque em Instalar app"* |
 | iPhone | botão **Instalar** que abre o passo a passo |
 
-No iPhone o guia mostra os quatro toques, conferidos no Safari do iOS 18:
+No iPhone o guia mostra os quatro toques, com duas versões — o iOS 27 trocou
+o botão que abre o menu, o resto do caminho é igual. O guia detecta a versão
+instalada e já abre na certa, mas deixa trocar (útil quando quem está lendo
+ajuda outra pessoa com um aparelho diferente):
 
-1. Toque no botão **⋯** (os três pontos)
+**iOS 27** (Safari novo):
+1. Toque no ícone **☰** (três tracinhos), ao lado da seta
 2. Toque em **Compartilhar**
-3. Na terceira coluna, toque em **Ver mais**
+3. Na terceira fileira, toque em **Ver mais**
 4. Toque em **Adicionar à Tela de Início**
 
-Não há caminho diferente por navegador de propósito: o menu "⋯" é o mesmo no
+**iOS 26 ou antes:**
+1. Toque no botão **⋯** (os três pontos)
+2. Toque em **Compartilhar**
+3. Na terceira fileira, toque em **Ver mais**
+4. Toque em **Adicionar à Tela de Início**
+
+Não há caminho diferente por navegador de propósito: esse menu é o mesmo no
 Safari atual e no Chrome, e inventar uma variação sem ter testado daria
-instrução errada para alguém. O guia só acrescenta uma nota de que em iPhones
-mais antigos o Compartilhar fica direto na barra de baixo.
+instrução errada para alguém. O guia só acrescenta uma nota de que no iOS 26
+ou antes, em iPhones mais antigos, o Compartilhar fica direto na barra de
+baixo.
 
 Ao abrir o guia, o cartão do canto some — os dois juntos disputariam a atenção.
 E o guia **só fecha no ×**: nem toque fora, nem Esc. A pessoa vai sair do app

@@ -32,6 +32,17 @@ export function eIphoneOuIpad() {
   return iOsClassico || iPadModerno
 }
 
+/**
+ * Número da versão do iOS/iPadOS (ex: 26), ou null quando não dá pra saber —
+ * o que inclui o iPad moderno "disfarçado" de Mac, cujo user agent não traz
+ * versão nenhuma (por isso o padrão de eIphoneOuIpad não serve aqui: um Mac
+ * de verdade tem "Mac OS X 10_15_7", sem dígito logo depois de "OS ").
+ */
+export function versaoDoIOS() {
+  const m = (navigator.userAgent || '').match(/OS (\d+)_/)
+  return m ? parseInt(m[1], 10) : null
+}
+
 /** Registra o service worker — é o que destrava o "Instalar" no Android. */
 export function registrarServiceWorker() {
   if (!('serviceWorker' in navigator)) return
