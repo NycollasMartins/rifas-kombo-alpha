@@ -8,3 +8,4 @@ rifas-acampamento-site.zip
 *.local
 .DS_Store
 npm-debug.log*
+supabase/.temp
