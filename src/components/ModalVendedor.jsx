@@ -5,7 +5,7 @@ import BotoesDoWhatsapp from './BotoesDoWhatsapp'
 import { useDadosRifa } from '../hooks/useDadosRifa'
 import { useSessao } from '../hooks/useSessao'
 import { infoDoGrupo } from '../utils/grupos'
-import { montarMensagemDoTermo } from '../utils/whatsapp'
+import { montarMensagemDeAcesso, montarMensagemDoTermo } from '../utils/whatsapp'
 import { traduzirErro } from '../lib/db/erros'
 
 /**
@@ -88,10 +88,25 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
         </p>
 
         <p className="texto-ajuda">
-          Agora envie o termo de responsabilidade para ele(a) ler e assinar. Abre o WhatsApp com
-          o texto pronto — você só confere e aperta enviar.
+          Envie o acesso ao app (link, como instalar e como criar a senha) e o termo de
+          responsabilidade. Abre o WhatsApp com o texto pronto — você só confere e aperta enviar.
         </p>
 
+        <p className="texto-ajuda" style={{ margin: '0 0 6px' }}>
+          <strong>1. Acesso ao app</strong>
+        </p>
+        <BotoesDoWhatsapp
+          telefone={vendedorCriado.telefone}
+          mensagem={montarMensagemDeAcesso({
+            nome: vendedorCriado.nome,
+            email: vendedorCriado.email,
+            link: window.location.origin,
+          })}
+        />
+
+        <p className="texto-ajuda" style={{ margin: '16px 0 6px' }}>
+          <strong>2. Termo de responsabilidade</strong>
+        </p>
         <BotoesDoWhatsapp
           telefone={vendedorCriado.telefone}
           mensagem={montarMensagemDoTermo({

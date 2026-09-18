@@ -118,6 +118,26 @@ export function montarMensagemDoTermo({ nome, grupo, precoRifa, meta, prazoFinal
   return linhas.join('\n')
 }
 
+/** Texto com o link do app, como instalar e como fazer o primeiro acesso. */
+export function montarMensagemDeAcesso({ nome, email, link }) {
+  const primeiroNome = String(nome || '').trim().split(/\s+/)[0] || 'Olá'
+
+  return [
+    `Oi, ${primeiroNome}! 🔥`,
+    '',
+    'Já dá pra acompanhar suas rifas do acampamento pelo celular:',
+    '',
+    `🔗 ${link}`,
+    '',
+    '📲 Para instalar:',
+    '• Android: abra o link, toque no menu (⋮) e em "Instalar app"',
+    '• iPhone: abra no Safari, toque em Compartilhar → Ver mais → Adicionar à Tela de Início',
+    '',
+    '🔑 Primeiro acesso:',
+    `Toque em "Sou vendedor(a) → É meu primeiro acesso", digite o e-mail ${email} e crie uma senha. Nas próximas vezes é só entrar com esse e-mail e senha.`,
+  ].join('\n')
+}
+
 /** Endereço que abre o WhatsApp com a mensagem pronta. */
 export function linkDoWhatsapp(telefone, mensagem) {
   const numero = normalizarTelefone(telefone)

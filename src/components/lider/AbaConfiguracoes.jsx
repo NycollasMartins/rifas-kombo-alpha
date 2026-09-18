@@ -6,6 +6,7 @@ import { notificarVendedores } from '../../lib/db/notificacoes'
 import { formatarPrazo } from '../../utils/prazo'
 import { infoDoGrupo } from '../../utils/grupos'
 import { traduzirErro } from '../../lib/db/erros'
+import CartaoQrCode from './CartaoQrCode'
 
 /** Ajustes do grupo. Cada grupo tem os seus — Alpha não mexe no Kombo. */
 export default function AbaConfiguracoes() {
@@ -51,6 +52,8 @@ export default function AbaConfiguracoes() {
 
   return (
     <>
+      <CartaoQrCode />
+
       <div className="card">
         <h2>Preço e meta do {nomeDoGrupo}</h2>
         <p className="texto-ajuda">
