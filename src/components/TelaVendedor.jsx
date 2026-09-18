@@ -5,6 +5,7 @@ import EstadoVazio from './EstadoVazio'
 import CompraDoVendedor from './CompraDoVendedor'
 import AvisoDePrazo from './AvisoDePrazo'
 import ConviteParaNotificar from './ConviteParaNotificar'
+import ModalAssinarTermo from './ModalAssinarTermo'
 import ModalNovaVenda from './ModalNovaVenda'
 import { useDadosRifa } from '../hooks/useDadosRifa'
 import { useSessao } from '../hooks/useSessao'
@@ -20,6 +21,7 @@ export default function TelaVendedor() {
   const { config, vendas, meuCadastro } = useDadosRifa()
   const { sair, grupo } = useSessao()
   const [modalAberto, setModalAberto] = useState(false)
+  const [assinandoTermo, setAssinandoTermo] = useState(false)
 
   const minhasVendas = useMemo(
     () => vendasDoVendedor(vendas, meuCadastro?.id),
@@ -60,6 +62,20 @@ export default function TelaVendedor() {
             O valor que você arrecadou ficou para o acampamento. Fale com a liderança se isso
             estiver errado.
           </span>
+        </div>
+      )}
+
+      {!saiu && !meuCadastro.termoDigitalEm && (
+        <div className={estilos.avisoPrazo}>
+          <strong>Falta assinar o termo de compromisso</strong>
+          <span>É rápido: só ler e digitar seu nome. </span>
+          <button
+            className="btn btn-primary btn-sm"
+            style={{ marginTop: 8 }}
+            onClick={() => setAssinandoTermo(true)}
+          >
+            Ler e assinar
+          </button>
         </div>
       )}
 
@@ -139,6 +155,14 @@ export default function TelaVendedor() {
       )}
 
       <ConviteParaNotificar vendedorId={meuCadastro.id} />
+
+      {assinandoTermo && (
+        <ModalAssinarTermo
+          vendedor={meuCadastro}
+          grupo={grupo}
+          aoFechar={() => setAssinandoTermo(false)}
+        />
+      )}
     </>
   )
 }

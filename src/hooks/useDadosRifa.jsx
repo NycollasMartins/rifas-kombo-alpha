@@ -19,6 +19,7 @@ import {
   registrarVenda,
 } from '../lib/db/vendas'
 import { listarSorteios, registrarSorteio } from '../lib/db/sorteios'
+import { assinarTermo } from '../lib/db/entrada'
 import { listarDadosPrivados, salvarDadosPrivados } from '../lib/db/vendedoresPrivado'
 import { apagarDadosDoGrupo, fecharMetaDoVendedor, transferirVendas } from '../lib/db/fechamento'
 import { traduzirErro } from '../lib/db/erros'
@@ -243,6 +244,17 @@ export function ProvedorDadosRifa({ children }) {
         const total = await transferirVendas(deId, paraId)
         await carregarTudo({ silencioso: true })
         return total
+      },
+
+      /** O vendedor assina o próprio termo digitando o nome. */
+      async assinarMeuTermo(nome, conteudo) {
+        await assinarTermo(nome, conteudo)
+        setTodosVendedores((a) =>
+          mesclar(
+            a,
+            { ...vendedores.find((v) => v.id === vendedorId), termoDigitalEm: new Date().toISOString() }
+          )
+        )
       },
 
       async salvarSorteio(vendaId) {

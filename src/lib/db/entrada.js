@@ -54,6 +54,12 @@ export async function codigoDefinido(grupo) {
   return Boolean(data)
 }
 
+/** Assinatura digital do termo: o vendedor digita o nome, o app grava. */
+export async function assinarTermo(nome, conteudo) {
+  const { error } = await supabase.rpc('assinar_termo', { p_nome: nome, p_conteudo: conteudo })
+  if (error) throw new Error(traduzirErro(error, 'Não foi possível assinar o termo.'))
+}
+
 export async function definirCodigoDeLider(grupo, codigo) {
   const { error } = await supabase.rpc('definir_codigo_de_lider', {
     p_grupo: grupo,

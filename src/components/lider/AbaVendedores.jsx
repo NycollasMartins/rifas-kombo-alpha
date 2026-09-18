@@ -80,7 +80,8 @@ export default function AbaVendedores() {
         <div className="card">
           {vendedores.map((vendedor) => {
             const resumo = resumoDoVendedor(vendedor, vendas, config)
-            const temTermo = Boolean(dadosPrivados[vendedor.id]?.termoPath)
+            const temTermo =
+              Boolean(dadosPrivados[vendedor.id]?.termoPath) || Boolean(vendedor.termoDigitalEm)
             const podeFechar = vendedor.situacao !== 'desistiu' && resumo.faltante > 0
 
             return (

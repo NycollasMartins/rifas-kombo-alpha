@@ -65,21 +65,32 @@ export default function PainelTermo({ vendedor }) {
     }
   }
 
+  const assinadoDigitalmente = Boolean(privado.termoAssinatura)
+
   return (
     <div className={estilos.caixa}>
       <div className={estilos.cabecalho}>
         <strong className={estilos.titulo}>Termo de compromisso</strong>
-        {privado.termoPath ? (
-          <span className="tag tag-good">Anexado</span>
+        {privado.termoPath || assinadoDigitalmente ? (
+          <span className="tag tag-good">{assinadoDigitalmente ? 'Assinado digital' : 'Anexado'}</span>
         ) : (
-          <span className="tag tag-warn">Falta anexar</span>
+          <span className="tag tag-warn">Falta assinar</span>
         )}
       </div>
 
+      {assinadoDigitalmente && (
+        <p className={estilos.ajuda}>
+          Assinado digitalmente por <strong>{privado.termoAssinatura}</strong> em{' '}
+          {formatarPrazo(privado.termoAssinadoEm)}.
+        </p>
+      )}
+
       <p className={estilos.ajuda}>
         {privado.termoPath
-          ? `Assinado em ${formatarPrazo(privado.termoAssinadoEm) || 'data não informada'}. Só a liderança do ${vendedor.grupo} consegue abrir.`
-          : 'Anexe o PDF preenchido ou a foto do papel assinado. Máximo 10 MB.'}
+          ? `Também tem arquivo anexado. Só a liderança do ${vendedor.grupo} consegue abrir.`
+          : assinadoDigitalmente
+            ? 'Se quiser, ainda dá pra anexar o PDF ou a foto do papel também.'
+            : 'A pessoa ainda não assinou digitalmente. Se preferir, anexe o PDF ou a foto do papel assinado (até 10 MB).'}
       </p>
 
       {erro && <p className="error-text">{erro}</p>}

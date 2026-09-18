@@ -16,6 +16,8 @@ export function mapearPrivado(linha) {
     observacao: linha.observacao || '',
     termoPath: linha.termo_path || '',
     termoAssinadoEm: linha.termo_assinado_em || '',
+    termoAssinatura: linha.termo_assinatura || '',
+    termoConteudo: linha.termo_conteudo || '',
   }
 }
 

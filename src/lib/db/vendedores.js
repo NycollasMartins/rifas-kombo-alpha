@@ -12,6 +12,7 @@ export function mapearVendedor(linha) {
     situacao: linha.situacao || 'ativo',
     // preenchido quando a pessoa cria a senha dela no primeiro acesso
     temSenha: Boolean(linha.user_id),
+    termoDigitalEm: linha.termo_digital_em || '',
     criadoEm: linha.created_at,
   }
 }

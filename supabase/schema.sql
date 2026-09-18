@@ -164,6 +164,7 @@ create index if not exists vendedores_grupo_idx on public.vendedores (grupo);
 create index if not exists vendedores_email_idx on public.vendedores (lower(email));
 
 alter table public.vendedores add column if not exists telefone text;
+alter table public.vendedores add column if not exists termo_digital_em timestamptz;
 
 -- ---- perfis: quem é quem depois de logar -----------------------------------
 --  dev      -> enxerga os dois grupos e corrige dados
@@ -185,8 +186,13 @@ create table if not exists public.vendedores_privado (
   observacao        text,
   termo_path        text,
   termo_assinado_em date,
+  termo_assinatura  text, -- nome digitado na assinatura digital
+  termo_conteudo    text, -- o texto exato que a pessoa leu e assinou
   atualizado_em     timestamptz not null default now()
 );
+
+alter table public.vendedores_privado add column if not exists termo_assinatura text;
+alter table public.vendedores_privado add column if not exists termo_conteudo text;
 
 -- ---- vendas -----------------------------------------------------------------
 --  Cada grupo tem sua própria numeração, começando no #001.
@@ -527,6 +533,40 @@ begin
 end;
 $$;
 
+/**
+ * Assinatura digital do termo: o vendedor lê o texto (já com os dados dele)
+ * dentro do app e digita o próprio nome. Grava o nome, o texto exato lido e
+ * a data em vendedores_privado — mas o vendedor nunca ganha permissão de
+ * ler essa tabela, só de chamar esta função. É por isso que fica bem aqui,
+ * não numa política de RLS.
+ */
+create or replace function public.assinar_termo(p_nome text, p_conteudo text)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_vendedor_id uuid := public.meu_vendedor_id();
+begin
+  if v_vendedor_id is null then
+    raise exception 'Só o vendedor pode assinar o próprio termo.';
+  end if;
+  if length(btrim(coalesce(p_nome, ''))) < 3 then
+    raise exception 'Digite seu nome completo.';
+  end if;
+
+  insert into public.vendedores_privado
+    (vendedor_id, termo_assinatura, termo_conteudo, termo_assinado_em, atualizado_em)
+  values (v_vendedor_id, btrim(p_nome), p_conteudo, current_date, now())
+  on conflict (vendedor_id) do update
+    set termo_assinatura  = excluded.termo_assinatura,
+        termo_conteudo    = excluded.termo_conteudo,
+        termo_assinado_em = excluded.termo_assinado_em,
+        atualizado_em     = now();
+
+  update public.vendedores set termo_digital_em = now() where id = v_vendedor_id;
+end;
+$$;
+
 -- ============================================================================
 --  7. FECHAMENTO E MANUTENÇÃO
 -- ============================================================================
@@ -805,6 +845,7 @@ revoke all on function public.registrar_lider(text, text, text)                 
 revoke all on function public.vincular_vendedor()                                   from public, anon;
 revoke all on function public.definir_codigo_de_lider(text, text)                   from public, anon;
 revoke all on function public.registrar_venda(integer, text, text, text, text, text, uuid) from public, anon;
+revoke all on function public.assinar_termo(text, text) from public, anon;
 revoke all on function public.fechar_meta_do_vendedor(uuid, text)                   from public, anon;
 revoke all on function public.transferir_vendas(uuid, uuid)                         from public, anon;
 revoke all on function public.apagar_dados_do_grupo(text)                           from public, anon;
@@ -813,6 +854,7 @@ grant execute on function public.registrar_lider(text, text, text)              
 grant execute on function public.vincular_vendedor()                                   to authenticated;
 grant execute on function public.definir_codigo_de_lider(text, text)                   to authenticated;
 grant execute on function public.registrar_venda(integer, text, text, text, text, text, uuid) to authenticated;
+grant execute on function public.assinar_termo(text, text) to authenticated;
 grant execute on function public.fechar_meta_do_vendedor(uuid, text)                   to authenticated;
 grant execute on function public.transferir_vendas(uuid, uuid)                         to authenticated;
 grant execute on function public.apagar_dados_do_grupo(text)                           to authenticated;
