@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
+import BotoesDoWhatsapp from './BotoesDoWhatsapp'
 import { useDadosRifa } from '../hooks/useDadosRifa'
 import { enviarTermo, gerarLinkDoTermo, removerTermo } from '../lib/db/arquivos'
+import { montarMensagemDoTermo } from '../utils/whatsapp'
 import { formatarPrazo } from '../utils/prazo'
 import estilos from './PainelTermo.module.css'
 
@@ -12,7 +14,7 @@ import estilos from './PainelTermo.module.css'
  * que expira em 10 minutos. O vendedor nunca enxerga nenhum termo.
  */
 export default function PainelTermo({ vendedor }) {
-  const { buscarDadosPrivados, salvarPrivadoDoVendedor } = useDadosRifa()
+  const { config, buscarDadosPrivados, salvarPrivadoDoVendedor } = useDadosRifa()
   const privado = buscarDadosPrivados(vendedor.id)
 
   const inputArquivo = useRef(null)
@@ -92,6 +94,25 @@ export default function PainelTermo({ vendedor }) {
             ? 'Se quiser, ainda dá pra anexar o PDF ou a foto do papel também.'
             : 'A pessoa ainda não assinou digitalmente. Se preferir, anexe o PDF ou a foto do papel assinado (até 10 MB).'}
       </p>
+
+      {!assinadoDigitalmente && (
+        <div style={{ marginBottom: 12 }}>
+          <p className={estilos.ajuda} style={{ margin: '0 0 6px' }}>
+            Reenviar o lembrete de assinar, por WhatsApp:
+          </p>
+          <BotoesDoWhatsapp
+            telefone={vendedor.telefone}
+            mensagem={montarMensagemDoTermo({
+              nome: vendedor.nome,
+              grupo: vendedor.grupo,
+              precoRifa: config.precoRifa,
+              meta: vendedor.meta ?? config.metaPadrao,
+              prazoFinal: config.prazoFinal,
+            })}
+            compacto
+          />
+        </div>
+      )}
 
       {erro && <p className="error-text">{erro}</p>}
 
