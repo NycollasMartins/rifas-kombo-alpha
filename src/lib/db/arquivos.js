@@ -31,9 +31,11 @@ function extensaoDe(arquivo) {
 }
 
 async function enviar(bucket, caminho, arquivo) {
+  // fotos tiradas direto da câmera às vezes chegam sem "type" — sem um
+  // Content-Type válido, o Storage recusa o envio com "No content provided"
   const { error } = await supabase.storage
     .from(bucket)
-    .upload(caminho, arquivo, { upsert: true, contentType: arquivo.type || undefined })
+    .upload(caminho, arquivo, { upsert: true, contentType: arquivo.type || 'application/octet-stream' })
 
   if (error) {
     if (String(error.message).toLowerCase().includes('bucket not found')) {
