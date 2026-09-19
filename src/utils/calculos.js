@@ -101,6 +101,39 @@ export function metaGeral(vendedores, config) {
   )
 }
 
+const VALOR_DO_TALAO = 600
+
+/** Vendedores que já arrecadaram mais que um talão (R$600). */
+export function rankingPorTalao(vendedores, vendas, config) {
+  return vendedoresNaDisputa(vendedores)
+    .map((v) => resumoDoVendedor(v, vendas, config))
+    .filter((r) => r.total > VALOR_DO_TALAO)
+    .sort((a, b) => b.total - a.total)
+}
+
+/** Quando o vendedor bateu a própria meta, olhando as vendas pagas em ordem. Null se não bateu ainda. */
+function dataDeConclusao(vendedor, vendas, config) {
+  const meta = metaDoVendedor(vendedor, config)
+  const pagas = vendasDoVendedor(vendas, vendedor.id)
+    .filter((v) => v.status === 'pago')
+    .sort((a, b) => new Date(a.data) - new Date(b.data))
+
+  let total = 0
+  for (const v of pagas) {
+    total += config.precoRifa
+    if (total >= meta) return v.data
+  }
+  return null
+}
+
+/** Vendedores que bateram a meta primeiro, do mais rápido pro mais lento. */
+export function rankingDePrimeiros(vendedores, vendas, config) {
+  return vendedoresNaDisputa(vendedores)
+    .map((v) => ({ vendedor: v, quando: dataDeConclusao(v, vendas, config) }))
+    .filter((r) => r.quando)
+    .sort((a, b) => new Date(a.quando) - new Date(b.quando))
+}
+
 /** Quem ainda não fechou a meta — a lista de cobrança do líder. */
 export function quemEstaDevendo(vendedores, vendas, config) {
   return vendedoresNaDisputa(vendedores)

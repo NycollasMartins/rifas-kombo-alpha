@@ -1,11 +1,14 @@
 import { useMemo } from 'react'
 import CartaoRanking from '../CartaoRanking'
+import CartaoRankingPrimeiros from '../CartaoRankingPrimeiros'
 import EstadoVazio from '../EstadoVazio'
 import BarraProgresso from '../BarraProgresso'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
 import {
   montarRanking,
   quemEstaDevendo,
+  rankingDePrimeiros,
+  rankingPorTalao,
   resumoGeral,
   separarPorDestino,
   totalPago,
@@ -35,6 +38,14 @@ export default function AbaPainel() {
   )
   const devedores = useMemo(
     () => quemEstaDevendo(vendedores, vendas, config),
+    [vendedores, vendas, config]
+  )
+  const topTalao = useMemo(
+    () => rankingPorTalao(vendedores, vendas, config).slice(0, 3),
+    [vendedores, vendas, config]
+  )
+  const topPrimeiros = useMemo(
+    () => rankingDePrimeiros(vendedores, vendas, config).slice(0, 3),
     [vendedores, vendas, config]
   )
 
@@ -112,6 +123,24 @@ export default function AbaPainel() {
               </div>
             ))}
           </div>
+        </>
+      )}
+
+      {topTalao.length > 0 && (
+        <>
+          <div className="section-head">
+            <h2>Top 3 — mais de um talão (R$ 600+)</h2>
+          </div>
+          <CartaoRanking ranking={topTalao} />
+        </>
+      )}
+
+      {topPrimeiros.length > 0 && (
+        <>
+          <div className="section-head">
+            <h2>Top 3 — primeiros a bater a meta</h2>
+          </div>
+          <CartaoRankingPrimeiros ranking={topPrimeiros} />
         </>
       )}
 

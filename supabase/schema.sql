@@ -407,22 +407,34 @@ $$;
 --  5. GATILHOS DA VENDA
 -- ============================================================================
 
-/** Grupo e número vêm do banco: o app nunca escolhe. */
+/**
+ * Grupo e número vêm do banco: o app nunca escolhe.
+ *
+ * O número é sempre o MENOR livre naquele grupo — se uma rifa foi apagada
+ * (venda de teste ou lançada errado), o número dela volta a ficar disponível
+ * para a próxima venda, em vez de ficar pulado para sempre.
+ */
 create or replace function public.definir_grupo_e_numero()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
   v_grupo text;
+  v_numero integer;
 begin
   select grupo into v_grupo from public.vendedores where id = new.vendedor_id;
   if v_grupo is null then
     raise exception 'Vendedor não encontrado.';
   end if;
 
+  select min(t.n) into v_numero
+  from generate_series(
+    1, (select coalesce(max(numero), 0) + 1 from public.vendas where grupo = v_grupo)
+  ) as t(n)
+  where not exists (
+    select 1 from public.vendas v where v.grupo = v_grupo and v.numero = t.n
+  );
+
   new.grupo  := v_grupo;
-  new.numero := case v_grupo
-                  when 'Alpha' then nextval('public.vendas_numero_alpha_seq')
-                  else              nextval('public.vendas_numero_kombo_seq')
-                end;
+  new.numero := coalesce(v_numero, 1);
   return new;
 end;
 $$;
@@ -671,12 +683,8 @@ begin
   delete from public.sorteios where grupo = p_grupo;
   delete from public.vendas   where grupo = p_grupo;
   delete from public.vendedores where grupo = p_grupo;
-
-  if p_grupo = 'Alpha' then
-    perform setval('public.vendas_numero_alpha_seq', 1, false);
-  else
-    perform setval('public.vendas_numero_kombo_seq', 1, false);
-  end if;
+  -- a numeração já volta ao #001 sozinha: o próximo cadastro pega o menor
+  -- número livre, e sem vendas no grupo o menor livre é sempre 1
 end;
 $$;
 

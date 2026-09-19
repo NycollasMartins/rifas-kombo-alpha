@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import EstadoVazio from '../EstadoVazio'
+import ModalDetalheVenda from '../ModalDetalheVenda'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
 import { gerarLinkDoComprovante } from '../../lib/db/arquivos'
 import { formatarNumeroRifa, rotuloPagamento } from '../../utils/formato'
@@ -10,6 +11,7 @@ import estilos from './AbaVendas.module.css'
 /** Todas as rifas do grupo, com filtros, status, repasse e comprovante. */
 export default function AbaVendas() {
   const {
+    config,
     vendedores,
     vendas,
     buscarVendedor,
@@ -23,6 +25,7 @@ export default function AbaVendas() {
   const [busca, setBusca] = useState('')
   const [erro, setErro] = useState('')
   const [abrindo, setAbrindo] = useState('')
+  const [vendoDetalhe, setVendoDetalhe] = useState(null)
 
   const lista = useMemo(() => {
     const porId = new Map(vendedores.map((v) => [v.id, v]))
@@ -157,6 +160,10 @@ export default function AbaVendas() {
                 <option value="confirmado">Confirmado</option>
               </select>
 
+              <button className="btn-ghost btn-sm" onClick={() => setVendoDetalhe(venda)}>
+                Ver
+              </button>
+
               <button
                 className="btn-ghost btn-sm btn-danger"
                 onClick={() => {
@@ -168,6 +175,15 @@ export default function AbaVendas() {
             </div>
           )
         })
+      )}
+
+      {vendoDetalhe && (
+        <ModalDetalheVenda
+          venda={vendoDetalhe}
+          vendedorNome={buscarVendedor(vendoDetalhe.vendedorId)?.nome}
+          precoRifa={config.precoRifa}
+          aoFechar={() => setVendoDetalhe(null)}
+        />
       )}
     </>
   )
