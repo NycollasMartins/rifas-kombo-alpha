@@ -278,7 +278,6 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
             ref={inputArquivo}
             type="file"
             accept="image/*,application/pdf"
-            capture="environment"
             onChange={escolherArquivo}
             hidden
           />

@@ -114,7 +114,6 @@ export default function ModalCompletarVenda({ lote, precoRifa, grupo, aoFechar }
             ref={inputArquivo}
             type="file"
             accept="image/*,application/pdf"
-            capture="environment"
             onChange={escolherArquivo}
             hidden
           />
