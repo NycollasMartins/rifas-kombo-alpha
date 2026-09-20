@@ -13,7 +13,16 @@
 
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (evento) => evento.waitUntil(self.clients.claim()))
-self.addEventListener('fetch', (evento) => evento.respondWith(fetch(evento.request)))
+
+// só repassa GET (páginas, imagens, scripts). POST/PUT (enviar comprovante,
+// registrar venda etc.) o service worker NUNCA intercepta: refazer um fetch
+// de uma requisição com corpo binário aqui dentro perde o corpo pelo
+// caminho — é o bug que fazia o envio de foto falhar com "No content
+// provided". Sem chamar respondWith(), o navegador cuida sozinho, direto.
+self.addEventListener('fetch', (evento) => {
+  if (evento.request.method !== 'GET') return
+  evento.respondWith(fetch(evento.request))
+})
 
 // notificação de verdade, na barra do celular (Web Push)
 self.addEventListener('push', (evento) => {
