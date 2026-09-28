@@ -30,6 +30,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
   const [nome, setNome] = useState(vendedor?.nome || '')
   const [email, setEmail] = useState(vendedor?.email || '')
   const [telefone, setTelefone] = useState(vendedor?.telefone || '')
+  const [tipo, setTipo] = useState(vendedor?.tipo || 'adolescente')
   const [meta, setMeta] = useState(String(vendedor?.meta ?? config.metaPadrao))
   const [situacao, setSituacao] = useState(vendedor?.situacao || 'ativo')
   const [observacao, setObservacao] = useState(privado?.observacao || '')
@@ -48,6 +49,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
       nome: nome.trim(),
       email: email.trim(),
       telefone: telefone.trim(),
+      tipo,
       meta: parseFloat(meta) || config.metaPadrao,
     }
 
@@ -186,6 +188,14 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
           É para este número que vai o termo de responsabilidade, assim que você salvar.
         </p>
       )}
+
+      <div className="field">
+        <label htmlFor="vendedor-tipo">Vai ao acampamento como</label>
+        <select id="vendedor-tipo" value={tipo} onChange={(e) => setTipo(e.target.value)}>
+          <option value="adolescente">Adolescente</option>
+          <option value="voluntario">Voluntário (vai trabalhar)</option>
+        </select>
+      </div>
 
       <div className="field">
         <label htmlFor="vendedor-meta">Meta (R$)</label>

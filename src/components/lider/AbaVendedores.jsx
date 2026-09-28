@@ -6,6 +6,7 @@ import ModalVendasDoVendedor from '../ModalVendasDoVendedor'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
 import { resumoDoVendedor, vendasDoVendedor } from '../../utils/calculos'
 import { formatarMoeda } from '../../utils/formato'
+import { baixarCsvDeVendedores } from '../../utils/csv'
 import { rifasParaFecharMeta } from '../../utils/prazo'
 import { traduzirErro } from '../../lib/db/erros'
 import estilos from './AbaVendedores.module.css'
@@ -64,9 +65,18 @@ export default function AbaVendedores() {
     <>
       <div className="section-head">
         <h2>Vendedores ({vendedores.length})</h2>
-        <button className="btn btn-sm btn-primary" onClick={() => setEmEdicao('novo')}>
-          + Adicionar
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="btn btn-sm"
+            onClick={() => baixarCsvDeVendedores(vendedores, vendas, config, dadosPrivados)}
+            disabled={vendedores.length === 0}
+          >
+            Exportar CSV
+          </button>
+          <button className="btn btn-sm btn-primary" onClick={() => setEmEdicao('novo')}>
+            + Adicionar
+          </button>
+        </div>
       </div>
 
       {erro && <p className="error-text">{erro}</p>}
@@ -90,6 +100,7 @@ export default function AbaVendedores() {
                   <div className={estilos.nome}>
                     {vendedor.nome}
                     <EtiquetaSituacao situacao={vendedor.situacao} />
+                    {vendedor.tipo === 'voluntario' && <span className="tag">Voluntário</span>}
                     {!temTermo && <span className={estilos.alerta}>sem termo</span>}
                     {!vendedor.temSenha && <span className={estilos.alerta}>não entrou ainda</span>}
                   </div>

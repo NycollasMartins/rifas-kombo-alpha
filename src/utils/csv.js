@@ -1,4 +1,5 @@
 import { formatarDataHora } from './formato'
+import { resumoDoVendedor, SITUACOES } from './calculos'
 
 const CABECALHO = [
   'numero',
@@ -45,9 +46,9 @@ export function montarCsvDeVendas(vendas, vendedores) {
   return linhas.map((linha) => linha.map(escaparCelula).join(',')).join('\n')
 }
 
-export function baixarCsvDeVendas(vendas, vendedores, nomeArquivo = 'rifas-vendas.csv') {
+function baixarCsv(conteudo, nomeArquivo) {
   // O \uFEFF na frente faz o Excel abrir o arquivo com os acentos corretos.
-  const blob = new Blob(['\uFEFF' + montarCsvDeVendas(vendas, vendedores)], {
+  const blob = new Blob(['\uFEFF' + conteudo], {
     type: 'text/csv;charset=utf-8;',
   })
   const url = URL.createObjectURL(blob)
@@ -58,4 +59,60 @@ export function baixarCsvDeVendas(vendas, vendedores, nomeArquivo = 'rifas-venda
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+}
+
+export function baixarCsvDeVendas(vendas, vendedores, nomeArquivo = 'rifas-vendas.csv') {
+  baixarCsv(montarCsvDeVendas(vendas, vendedores), nomeArquivo)
+}
+
+const CABECALHO_VENDEDORES = [
+  'nome',
+  'email',
+  'telefone',
+  'grupo',
+  'tipo',
+  'situacao',
+  'meta',
+  'arrecadado',
+  'a_receber',
+  'rifas',
+  'termo',
+  'criou_senha',
+]
+
+export function montarCsvDeVendedores(vendedores, vendas, config, dadosPrivados = {}) {
+  const linhas = [CABECALHO_VENDEDORES]
+  vendedores
+    .slice()
+    .sort((a, b) => a.nome.localeCompare(b.nome))
+    .forEach((vendedor) => {
+      const r = resumoDoVendedor(vendedor, vendas, config)
+      const assinou = Boolean(dadosPrivados[vendedor.id]?.termoPath) || Boolean(vendedor.termoDigitalEm)
+      linhas.push([
+        vendedor.nome,
+        vendedor.email,
+        vendedor.telefone || '',
+        vendedor.grupo,
+        vendedor.tipo === 'voluntario' ? 'voluntario' : 'adolescente',
+        SITUACOES[vendedor.situacao] || vendedor.situacao,
+        r.meta,
+        r.total,
+        r.pendente,
+        r.quantidade,
+        assinou ? 'sim' : 'nao',
+        vendedor.temSenha ? 'sim' : 'nao',
+      ])
+    })
+
+  return linhas.map((linha) => linha.map(escaparCelula).join(',')).join('\n')
+}
+
+export function baixarCsvDeVendedores(
+  vendedores,
+  vendas,
+  config,
+  dadosPrivados,
+  nomeArquivo = 'rifas-vendedores.csv'
+) {
+  baixarCsv(montarCsvDeVendedores(vendedores, vendas, config, dadosPrivados), nomeArquivo)
 }

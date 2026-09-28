@@ -7,6 +7,7 @@ export function mapearVendedor(linha) {
     nome: linha.nome,
     email: linha.email,
     telefone: linha.telefone || '',
+    tipo: linha.tipo || 'adolescente',
     grupo: linha.grupo,
     meta: linha.meta === null || linha.meta === undefined ? null : Number(linha.meta),
     situacao: linha.situacao || 'ativo',
@@ -29,7 +30,7 @@ function normalizarEmail(email) {
   return String(email || '').trim().toLowerCase()
 }
 
-export async function criarVendedor({ nome, email, telefone, grupo, meta }) {
+export async function criarVendedor({ nome, email, telefone, tipo, grupo, meta }) {
   const linha = verificar(
     await supabase
       .from('vendedores')
@@ -37,6 +38,7 @@ export async function criarVendedor({ nome, email, telefone, grupo, meta }) {
         nome,
         email: normalizarEmail(email),
         telefone: telefone || null,
+        tipo: tipo || 'adolescente',
         grupo,
         meta: meta ?? null,
       })
@@ -47,11 +49,12 @@ export async function criarVendedor({ nome, email, telefone, grupo, meta }) {
   return mapearVendedor(linha)
 }
 
-export async function atualizarVendedor(id, { nome, email, telefone, meta, situacao }) {
+export async function atualizarVendedor(id, { nome, email, telefone, tipo, meta, situacao }) {
   const mudancas = {}
   if (nome !== undefined) mudancas.nome = nome
   if (email !== undefined) mudancas.email = normalizarEmail(email)
   if (telefone !== undefined) mudancas.telefone = telefone || null
+  if (tipo !== undefined) mudancas.tipo = tipo
   if (meta !== undefined) mudancas.meta = meta ?? null
   if (situacao !== undefined) mudancas.situacao = situacao
 
