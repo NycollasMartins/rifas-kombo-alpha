@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import EstadoVazio from '../EstadoVazio'
 import EtiquetaSituacao from '../EtiquetaSituacao'
 import ModalVendedor from '../ModalVendedor'
@@ -19,6 +19,15 @@ export default function AbaVendedores() {
   const [vendoVendasDe, setVendoVendasDe] = useState(null)
   const [erro, setErro] = useState('')
   const [ocupado, setOcupado] = useState('')
+  const [busca, setBusca] = useState('')
+
+  const filtrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase()
+    if (!termo) return vendedores
+    return vendedores.filter((v) =>
+      `${v.nome} ${v.email} ${v.telefone}`.toLowerCase().includes(termo)
+    )
+  }, [vendedores, busca])
 
   async function excluir(vendedor) {
     const quantidade = vendasDoVendedor(vendas, vendedor.id).length
@@ -79,6 +88,16 @@ export default function AbaVendedores() {
         </div>
       </div>
 
+      {vendedores.length > 0 && (
+        <div className="filters">
+          <input
+            placeholder="Buscar por nome, e-mail ou telefone…"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+          />
+        </div>
+      )}
+
       {erro && <p className="error-text">{erro}</p>}
 
       {vendedores.length === 0 ? (
@@ -86,9 +105,13 @@ export default function AbaVendedores() {
           <p>Nenhum vendedor cadastrado.</p>
           <p>Cadastre com o e-mail de cada um para que possam entrar.</p>
         </EstadoVazio>
+      ) : filtrados.length === 0 ? (
+        <EstadoVazio icone="🔍">
+          <p>Nenhum vendedor encontrado.</p>
+        </EstadoVazio>
       ) : (
         <div className="card">
-          {vendedores.map((vendedor) => {
+          {filtrados.map((vendedor) => {
             const resumo = resumoDoVendedor(vendedor, vendas, config)
             const temTermo =
               Boolean(dadosPrivados[vendedor.id]?.termoPath) || Boolean(vendedor.termoDigitalEm)
