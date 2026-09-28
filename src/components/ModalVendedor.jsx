@@ -7,6 +7,7 @@ import { useSessao } from '../hooks/useSessao'
 import { infoDoGrupo } from '../utils/grupos'
 import { montarMensagemDeAcesso, montarMensagemDoTermo } from '../utils/whatsapp'
 import { traduzirErro } from '../lib/db/erros'
+import { formatarDataHora } from '../utils/formato'
 
 /**
  * Cadastro do vendedor.
@@ -20,8 +21,14 @@ import { traduzirErro } from '../lib/db/erros'
  * cadastrado — para que ele leia e assine.
  */
 export default function ModalVendedor({ vendedor, aoFechar }) {
-  const { config, adicionarVendedor, editarVendedor, buscarDadosPrivados, salvarPrivadoDoVendedor } =
-    useDadosRifa()
+  const {
+    config,
+    vendedores,
+    adicionarVendedor,
+    editarVendedor,
+    buscarDadosPrivados,
+    salvarPrivadoDoVendedor,
+  } = useDadosRifa()
   const { grupo } = useSessao()
 
   const editando = Boolean(vendedor)
@@ -37,6 +44,13 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [vendedorCriado, setVendedorCriado] = useState(null)
+
+  // marca que a mensagem de acesso foi enviada — só quando o líder de fato toca em enviar
+  function marcarAcessoEnviado(id) {
+    editarVendedor(id, { acessoEnviadoEm: new Date().toISOString() }).catch(() => {})
+  }
+
+  const acessoEm = editando ? vendedores.find((v) => v.id === vendedor.id)?.acessoEnviadoEm : ''
 
   async function salvar() {
     if (!nome.trim()) return setErro('Digite o nome do vendedor.')
@@ -104,6 +118,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
             email: vendedorCriado.email,
             link: window.location.origin,
           })}
+          aoEnviar={() => marcarAcessoEnviado(vendedorCriado.id)}
         />
 
         <p className="texto-ajuda" style={{ margin: '16px 0 6px' }}>
@@ -237,6 +252,26 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
               placeholder="Ex: desistiu por motivo de saúde, avisou em 10/09"
               value={observacao}
               onChange={(e) => setObservacao(e.target.value)}
+            />
+          </div>
+
+          <div className="field">
+            <label>Acesso ao app</label>
+            <p className="texto-ajuda" style={{ margin: '0 0 8px' }}>
+              {acessoEm
+                ? `Mensagem enviada em ${formatarDataHora(acessoEm)}. Dá pra reenviar.`
+                : 'A mensagem com o link, como instalar e o grupo ainda não foi enviada.'}
+            </p>
+            <BotoesDoWhatsapp
+              telefone={telefone}
+              mensagem={montarMensagemDeAcesso({
+                nome,
+                email,
+                link: window.location.origin,
+              })}
+              rotulo={acessoEm ? 'Reenviar no WhatsApp' : 'Enviar no WhatsApp'}
+              aoEnviar={() => marcarAcessoEnviado(vendedor.id)}
+              compacto
             />
           </div>
 

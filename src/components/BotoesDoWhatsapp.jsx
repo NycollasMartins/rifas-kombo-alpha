@@ -8,7 +8,7 @@ import estilos from './BotoesDoWhatsapp.module.css'
  * ou se o número não der para reconhecer, sobra o "Copiar mensagem", que
  * resolve igual: cola em qualquer conversa.
  */
-export default function BotoesDoWhatsapp({ telefone, mensagem, compacto }) {
+export default function BotoesDoWhatsapp({ telefone, mensagem, compacto, rotulo, aoEnviar }) {
   const [copiado, setCopiado] = useState(false)
 
   const temTelefone = telefoneServeParaWhatsapp(telefone)
@@ -16,6 +16,7 @@ export default function BotoesDoWhatsapp({ telefone, mensagem, compacto }) {
   async function copiar() {
     const deu = await copiarTexto(mensagem)
     setCopiado(deu)
+    if (deu && aoEnviar) aoEnviar()
     if (deu) setTimeout(() => setCopiado(false), 2500)
   }
 
@@ -27,8 +28,9 @@ export default function BotoesDoWhatsapp({ telefone, mensagem, compacto }) {
           href={linkDoWhatsapp(telefone, mensagem)}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={aoEnviar}
         >
-          Enviar no WhatsApp
+          {rotulo || 'Enviar no WhatsApp'}
         </a>
       ) : (
         <span className={estilos.semTelefone}>

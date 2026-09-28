@@ -14,6 +14,7 @@ export function mapearVendedor(linha) {
     // preenchido quando a pessoa cria a senha dela no primeiro acesso
     temSenha: Boolean(linha.user_id),
     termoDigitalEm: linha.termo_digital_em || '',
+    acessoEnviadoEm: linha.acesso_enviado_em || '',
     criadoEm: linha.created_at,
   }
 }
@@ -49,7 +50,10 @@ export async function criarVendedor({ nome, email, telefone, tipo, grupo, meta }
   return mapearVendedor(linha)
 }
 
-export async function atualizarVendedor(id, { nome, email, telefone, tipo, meta, situacao }) {
+export async function atualizarVendedor(
+  id,
+  { nome, email, telefone, tipo, meta, situacao, acessoEnviadoEm }
+) {
   const mudancas = {}
   if (nome !== undefined) mudancas.nome = nome
   if (email !== undefined) mudancas.email = normalizarEmail(email)
@@ -57,6 +61,7 @@ export async function atualizarVendedor(id, { nome, email, telefone, tipo, meta,
   if (tipo !== undefined) mudancas.tipo = tipo
   if (meta !== undefined) mudancas.meta = meta ?? null
   if (situacao !== undefined) mudancas.situacao = situacao
+  if (acessoEnviadoEm !== undefined) mudancas.acesso_enviado_em = acessoEnviadoEm || null
 
   const linha = verificar(
     await supabase.from('vendedores').update(mudancas).eq('id', id).select().single(),

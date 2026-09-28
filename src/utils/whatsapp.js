@@ -118,7 +118,10 @@ export function montarMensagemDoTermo({ nome, grupo, precoRifa, meta, prazoFinal
   return linhas.join('\n')
 }
 
-/** Texto com o link do app, como instalar e como fazer o primeiro acesso. */
+const LINK_DO_GRUPO =
+  'https://chat.whatsapp.com/FedzhZwIGK43s7dxhkBaz5?s=cl&p=i&mlu=4&ilr=4'
+
+/** Texto com o link do app, como instalar, o primeiro acesso e o grupo das rifas. */
 export function montarMensagemDeAcesso({ nome, email, link }) {
   const primeiroNome = String(nome || '').trim().split(/\s+/)[0] || 'Olá'
 
@@ -135,6 +138,9 @@ export function montarMensagemDeAcesso({ nome, email, link }) {
     '',
     '🔑 Primeiro acesso:',
     `Toque em "Sou vendedor(a) → É meu primeiro acesso", digite o e-mail ${email} e crie uma senha. Nas próximas vezes é só entrar com esse e-mail e senha.`,
+    '',
+    '👥 Entre no grupo das rifas:',
+    LINK_DO_GRUPO,
   ].join('\n')
 }
 

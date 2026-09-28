@@ -165,6 +165,7 @@ create index if not exists vendedores_email_idx on public.vendedores (lower(emai
 
 alter table public.vendedores add column if not exists telefone text;
 alter table public.vendedores add column if not exists termo_digital_em timestamptz;
+alter table public.vendedores add column if not exists acesso_enviado_em timestamptz;
 alter table public.vendedores add column if not exists tipo text not null default 'adolescente'
   check (tipo in ('adolescente', 'voluntario'));
 
