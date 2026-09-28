@@ -193,7 +193,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
         <label htmlFor="vendedor-tipo">Vai ao acampamento como</label>
         <select id="vendedor-tipo" value={tipo} onChange={(e) => setTipo(e.target.value)}>
           <option value="adolescente">Adolescente</option>
-          <option value="voluntario">Voluntário (vai trabalhar)</option>
+          <option value="voluntario">Voluntário</option>
         </select>
       </div>
 
