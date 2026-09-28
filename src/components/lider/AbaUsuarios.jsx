@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import EstadoVazio from '../EstadoVazio'
 import { useSessao } from '../../hooks/useSessao'
-import { excluirLider, listarLideres } from '../../lib/db/perfis'
+import { definirPermissaoDeVenda, excluirLider, listarLideres } from '../../lib/db/perfis'
 import { formatarDataHora } from '../../utils/formato'
 import { traduzirErro } from '../../lib/db/erros'
 
@@ -15,6 +15,7 @@ export default function AbaUsuarios() {
   const [lideres, setLideres] = useState(null)
   const [erro, setErro] = useState('')
   const [excluindo, setExcluindo] = useState('')
+  const [alterando, setAlterando] = useState('')
 
   useEffect(() => {
     let ativo = true
@@ -25,6 +26,21 @@ export default function AbaUsuarios() {
       ativo = false
     }
   }, [grupo])
+
+  async function alternarPermissao(lider) {
+    setErro('')
+    setAlterando(lider.id)
+    try {
+      await definirPermissaoDeVenda(lider.id, !lider.podeCorrigirVenda)
+      setLideres((atual) =>
+        atual.map((l) => (l.id === lider.id ? { ...l, podeCorrigirVenda: !l.podeCorrigirVenda } : l))
+      )
+    } catch (e) {
+      setErro(traduzirErro(e, 'Não foi possível alterar a permissão.'))
+    } finally {
+      setAlterando('')
+    }
+  }
 
   async function excluir(lider) {
     if (!confirm(`Excluir o acesso de líder de ${lider.nome}?`)) return
@@ -67,6 +83,17 @@ export default function AbaUsuarios() {
               </div>
               {eDev && (
                 <div className="actions">
+                  <button
+                    className="btn-ghost btn-sm"
+                    onClick={() => alternarPermissao(lider)}
+                    disabled={alterando === lider.id}
+                  >
+                    {alterando === lider.id
+                      ? '…'
+                      : lider.podeCorrigirVenda
+                        ? 'Revogar corrigir venda'
+                        : 'Liberar corrigir venda'}
+                  </button>
                   <button
                     className="btn-ghost btn-sm btn-danger"
                     onClick={() => excluir(lider)}

@@ -183,6 +183,8 @@ create table if not exists public.perfis (
   constraint perfis_grupo_obrigatorio check (papel = 'dev' or grupo is not null)
 );
 
+alter table public.perfis add column if not exists pode_corrigir_venda boolean not null default false;
+
 -- ---- vendedores_privado: o que NÃO pode circular ---------------------------
 create table if not exists public.vendedores_privado (
   vendedor_id       uuid primary key references public.vendedores (id) on delete cascade,
@@ -274,6 +276,12 @@ $$;
 create or replace function public.meu_vendedor_id()
 returns uuid language sql stable security definer set search_path = public as $$
   select vendedor_id from public.perfis where id = auth.uid()
+$$;
+
+/** Dev sempre pode; líder só se o dev liberou (Usuários -> Corrigir venda). */
+create or replace function public.pode_corrigir_venda()
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.e_dev() or coalesce((select pode_corrigir_venda from public.perfis where id = auth.uid()), false)
 $$;
 
 /** O dev enxerga os dois grupos; todo mundo enxerga só o seu. */
@@ -456,7 +464,7 @@ create trigger vendas_definir_grupo_e_numero
 create or replace function public.proteger_colunas_da_venda()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  if public.e_dev() then
+  if public.pode_corrigir_venda() then
     return new;
   end if;
 
@@ -871,7 +879,8 @@ grant execute on function public.transferir_vendas(uuid, uuid)                  
 grant execute on function public.apagar_dados_do_grupo(text)                           to authenticated;
 grant execute on function public.meu_papel(), public.meu_grupo(), public.e_dev(),
                           public.e_lider(), public.meu_vendedor_id(),
-                          public.posso_ver(text), public.codigo_definido(text)
+                          public.posso_ver(text), public.codigo_definido(text),
+                          public.pode_corrigir_venda()
   to anon, authenticated;
 
 -- ============================================================================

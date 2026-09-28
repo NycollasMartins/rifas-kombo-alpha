@@ -30,6 +30,12 @@ export async function meuVendedorId() {
   return data || null
 }
 
+export async function podeCorrigirVenda() {
+  const { data, error } = await supabase.rpc('pode_corrigir_venda')
+  if (error) return false
+  return Boolean(data)
+}
+
 /** Vira líder do grupo, se o código conferir. */
 export async function registrarLider(grupo, codigo, nome) {
   const { data, error } = await supabase.rpc('registrar_lider', {

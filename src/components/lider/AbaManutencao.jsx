@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import EstadoVazio from '../EstadoVazio'
 import ModalEditarVenda from '../ModalEditarVenda'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
+import { useSessao } from '../../hooks/useSessao'
 import { formatarDataHora, formatarNumeroRifa, rotuloPagamento } from '../../utils/formato'
 import { traduzirErro } from '../../lib/db/erros'
 import estilos from './AbaManutencao.module.css'
@@ -15,6 +16,7 @@ import estilos from './AbaManutencao.module.css'
  */
 export default function AbaManutencao() {
   const { vendedores, vendas, buscarVendedor, passarVendasPara } = useDadosRifa()
+  const { eDev } = useSessao()
 
   const [busca, setBusca] = useState('')
   const [vendaEmEdicao, setVendaEmEdicao] = useState(null)
@@ -73,10 +75,12 @@ export default function AbaManutencao() {
 
   return (
     <>
-      <div className={estilos.aviso}>
-        <strong>Modo dev.</strong> Aqui dá para reescrever dados já registrados. Use quando algo
-        foi lançado errado — não para o dia a dia.
-      </div>
+      {eDev && (
+        <div className={estilos.aviso}>
+          <strong>Modo dev.</strong> Aqui dá para reescrever dados já registrados. Use quando algo
+          foi lançado errado — não para o dia a dia.
+        </div>
+      )}
 
       <div className="card">
         <h2>Corrigir uma venda</h2>
@@ -121,6 +125,7 @@ export default function AbaManutencao() {
         })}
       </div>
 
+      {eDev && (
       <div className="card">
         <h2>Transferir rifas entre vendedores</h2>
         <p className="texto-ajuda">
@@ -165,6 +170,7 @@ export default function AbaManutencao() {
           {transferindo ? 'Transferindo…' : 'Transferir'}
         </button>
       </div>
+      )}
 
       {vendaEmEdicao && (
         <ModalEditarVenda venda={vendaEmEdicao} aoFechar={() => setVendaEmEdicao(null)} />

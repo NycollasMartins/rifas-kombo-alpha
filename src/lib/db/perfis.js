@@ -10,13 +10,25 @@ export async function listarLideres(grupo) {
   const linhas = verificar(
     await supabase
       .from('perfis')
-      .select('id, nome, papel, criado_em')
+      .select('id, nome, papel, criado_em, pode_corrigir_venda')
       .eq('grupo', grupo)
       .eq('papel', 'lider')
       .order('criado_em', { ascending: true }),
     'Não foi possível carregar os líderes.'
   )
-  return linhas.map((l) => ({ id: l.id, nome: l.nome || '(sem nome)', criadoEm: l.criado_em }))
+  return linhas.map((l) => ({
+    id: l.id,
+    nome: l.nome || '(sem nome)',
+    criadoEm: l.criado_em,
+    podeCorrigirVenda: Boolean(l.pode_corrigir_venda),
+  }))
+}
+
+export async function definirPermissaoDeVenda(id, valor) {
+  verificar(
+    await supabase.from('perfis').update({ pode_corrigir_venda: valor }).eq('id', id),
+    'Não foi possível alterar a permissão.'
+  )
 }
 
 export async function excluirLider(id) {

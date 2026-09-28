@@ -27,11 +27,11 @@ const ABA_DO_DEV = { chave: 'manutencao', rotulo: 'Manutenção', Componente: Ab
 
 /** Casca do painel do líder: cabeçalho, abas e a aba escolhida. */
 export default function PainelLider() {
-  const { email, eDev, grupo, sair } = useSessao()
+  const { email, eDev, podeCorrigirVenda, grupo, sair } = useSessao()
   const info = infoDoGrupo(grupo)
   const [abaAtiva, setAbaAtiva] = useState('painel')
 
-  const abas = eDev ? [...ABAS, ABA_DO_DEV] : ABAS
+  const abas = eDev || podeCorrigirVenda ? [...ABAS, ABA_DO_DEV] : ABAS
   const { Componente } = abas.find((a) => a.chave === abaAtiva) || abas[0]
 
   return (

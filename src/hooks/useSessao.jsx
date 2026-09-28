@@ -1,7 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { definirLembrarLogin, supabase } from '../lib/supabase'
 import { traduzirErro } from '../lib/db/erros'
-import { meuGrupo, meuPapel, meuVendedorId, registrarLider, vincularVendedor } from '../lib/db/entrada'
+import {
+  meuGrupo,
+  meuPapel,
+  meuVendedorId,
+  podeCorrigirVenda,
+  registrarLider,
+  vincularVendedor,
+} from '../lib/db/entrada'
 import { ALPHA, aplicarTemaDoGrupo, grupoValido } from '../utils/grupos'
 
 /**
@@ -58,8 +65,12 @@ export function ProvedorSessao({ children }) {
   const carregarAcesso = useCallback(async () => {
     const papel = await meuPapel()
     if (papel === 'sem_acesso') return { ...SEM_ACESSO, papel }
-    const [grupo, vendedorId] = await Promise.all([meuGrupo(), meuVendedorId()])
-    return { papel, grupo, vendedorId }
+    const [grupo, vendedorId, corrigirVenda] = await Promise.all([
+      meuGrupo(),
+      meuVendedorId(),
+      podeCorrigirVenda(),
+    ])
+    return { papel, grupo, vendedorId, podeCorrigirVenda: corrigirVenda }
   }, [])
 
   useEffect(() => {
@@ -101,6 +112,7 @@ export function ProvedorSessao({ children }) {
       estaLogado: Boolean(sessao),
       temAcesso: ['dev', 'lider', 'vendedor'].includes(acesso.papel),
       eDev,
+      podeCorrigirVenda: eDev || Boolean(acesso.podeCorrigirVenda),
       eLider: acesso.papel === 'dev' || acesso.papel === 'lider',
       eVendedor: acesso.papel === 'vendedor',
       verificando,
