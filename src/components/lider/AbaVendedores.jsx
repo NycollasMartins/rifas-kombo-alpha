@@ -107,8 +107,8 @@ export default function AbaVendedores() {
         <div className="filters">
           <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
             <option value="">Todos</option>
-            <option value="adolescente">Só adolescentes</option>
-            <option value="voluntario">Só voluntários</option>
+            <option value="adolescente">Adolescentes</option>
+            <option value="voluntario">Voluntários</option>
           </select>
           <input
             placeholder="Buscar por nome, e-mail ou telefone…"
