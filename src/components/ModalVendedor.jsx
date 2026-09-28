@@ -163,7 +163,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
           id="vendedor-nome"
           placeholder="Nome completo"
           value={nome}
-          onChange={(e) => setNome(e.target.vaserlue)}
+          onChange={(e) => setNome(e.target.value)}
           autoFocus
         />
       </div>
