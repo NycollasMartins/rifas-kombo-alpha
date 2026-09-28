@@ -80,7 +80,7 @@ export default function AbaVendedores() {
   return (
     <>
       <div className="section-head">
-        <h2>Vendedores ({vendedores.length})</h2>
+        <h2>Vendedores ({filtrados.length})</h2>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
             className="btn btn-sm"
