@@ -20,14 +20,21 @@ export default function AbaVendedores() {
   const [erro, setErro] = useState('')
   const [ocupado, setOcupado] = useState('')
   const [busca, setBusca] = useState('')
+  const [filtroTipo, setFiltroTipo] = useState('') // '' = todos
+
+  const doTipo = useMemo(
+    () => (filtroTipo ? vendedores.filter((v) => v.tipo === filtroTipo) : vendedores),
+    [vendedores, filtroTipo]
+  )
+  const rotuloDoTipo = { '': '', adolescente: ' (adolescentes)', voluntario: ' (voluntários)' }[filtroTipo]
 
   const filtrados = useMemo(() => {
     const termo = busca.trim().toLowerCase()
-    if (!termo) return vendedores
-    return vendedores.filter((v) =>
+    if (!termo) return doTipo
+    return doTipo.filter((v) =>
       `${v.nome} ${v.email} ${v.telefone}`.toLowerCase().includes(termo)
     )
-  }, [vendedores, busca])
+  }, [doTipo, busca])
 
   async function excluir(vendedor) {
     const quantidade = vendasDoVendedor(vendas, vendedor.id).length
@@ -77,10 +84,18 @@ export default function AbaVendedores() {
         <div style={{ display: 'flex', gap: 8 }}>
           <button
             className="btn btn-sm"
-            onClick={() => baixarCsvDeVendedores(vendedores, vendas, config, dadosPrivados)}
-            disabled={vendedores.length === 0}
+            onClick={() =>
+              baixarCsvDeVendedores(
+                doTipo,
+                vendas,
+                config,
+                dadosPrivados,
+                `rifas-vendedores${filtroTipo ? '-' + filtroTipo + 's' : ''}.csv`
+              )
+            }
+            disabled={doTipo.length === 0}
           >
-            Exportar CSV
+            Exportar CSV{rotuloDoTipo}
           </button>
           <button className="btn btn-sm btn-primary" onClick={() => setEmEdicao('novo')}>
             + Adicionar
@@ -90,6 +105,11 @@ export default function AbaVendedores() {
 
       {vendedores.length > 0 && (
         <div className="filters">
+          <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
+            <option value="">Todos</option>
+            <option value="adolescente">Só adolescentes</option>
+            <option value="voluntario">Só voluntários</option>
+          </select>
           <input
             placeholder="Buscar por nome, e-mail ou telefone…"
             value={busca}
