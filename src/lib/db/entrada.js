@@ -73,3 +73,24 @@ export async function definirCodigoDeLider(grupo, codigo) {
   })
   if (error) throw new Error(traduzirErro(error, 'Não foi possível salvar o código.'))
 }
+
+export async function definirCodigoDeVendedor(grupo, codigo) {
+  const { error } = await supabase.rpc('definir_codigo_de_vendedor', {
+    p_grupo: grupo,
+    p_codigo: codigo,
+  })
+  if (error) throw new Error(traduzirErro(error, 'Não foi possível salvar o código.'))
+}
+
+/** Autocadastro: cria a própria conta de vendedor, com o código do grupo. */
+export async function registrarVendedorAutonomo({ grupo, codigo, nome, email, telefone, tipo }) {
+  const { error } = await supabase.rpc('registrar_vendedor_autonomo', {
+    p_grupo: grupo,
+    p_codigo: codigo,
+    p_nome: nome,
+    p_email: email,
+    p_telefone: telefone,
+    p_tipo: tipo,
+  })
+  if (error) throw new Error(traduzirErro(error, 'Não foi possível concluir o cadastro.'))
+}

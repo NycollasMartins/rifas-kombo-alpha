@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
 import { useSessao } from '../../hooks/useSessao'
-import { definirCodigoDeLider } from '../../lib/db/entrada'
+import { definirCodigoDeLider, definirCodigoDeVendedor } from '../../lib/db/entrada'
 import { notificarVendedores } from '../../lib/db/notificacoes'
 import { formatarPrazo } from '../../utils/prazo'
 import { infoDoGrupo } from '../../utils/grupos'
@@ -21,6 +21,7 @@ export default function AbaConfiguracoes() {
   const [dataSorteio, setDataSorteio] = useState(config.dataSorteio || '')
   const [primeiroAcerto, setPrimeiroAcerto] = useState(config.primeiroAcerto || '')
   const [codigo, setCodigo] = useState('')
+  const [codigoVendedor, setCodigoVendedor] = useState('')
   const [novaSenha, setNovaSenha] = useState('')
   const [recados, setRecados] = useState({})
 
@@ -236,6 +237,41 @@ export default function AbaConfiguracoes() {
               async () => {
                 await definirCodigoDeLider(grupo, codigo)
                 setCodigo('')
+              },
+              'Código atualizado.'
+            )
+          }
+        >
+          Trocar código
+        </button>
+      </div>
+
+      <div className="card">
+        <h2>Código de cadastro do vendedor</h2>
+        <p className="texto-ajuda">
+          É esta palavra que a pessoa digita para se cadastrar sozinha como vendedor(a) do{' '}
+          {nomeDoGrupo}, em "Ainda não tenho cadastro". Diferente do código de liderança — quem
+          tiver este código só vira vendedor, nunca líder.
+        </p>
+        <div className="field">
+          <label htmlFor="cfg-codigo-vendedor">Novo código</label>
+          <input
+            id="cfg-codigo-vendedor"
+            autoComplete="off"
+            placeholder="Pelo menos 6 caracteres"
+            value={codigoVendedor}
+            onChange={(e) => setCodigoVendedor(e.target.value)}
+          />
+        </div>
+        <Recado cartao="codigoVendedor" />
+        <button
+          className="btn btn-primary"
+          onClick={() =>
+            tentar(
+              'codigoVendedor',
+              async () => {
+                await definirCodigoDeVendedor(grupo, codigoVendedor)
+                setCodigoVendedor('')
               },
               'Código atualizado.'
             )

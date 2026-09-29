@@ -7,6 +7,7 @@ import {
   meuVendedorId,
   podeCorrigirVenda,
   registrarLider,
+  registrarVendedorAutonomo,
   vincularVendedor,
 } from '../lib/db/entrada'
 import { ALPHA, aplicarTemaDoGrupo, grupoValido } from '../utils/grupos'
@@ -173,6 +174,23 @@ export function ProvedorSessao({ children }) {
           return { ok: false, erro: e.message }
         }
 
+        setAcesso(await carregarAcesso())
+        return { ok: true, erro: '' }
+      },
+
+      /** Autocadastro: a pessoa cria a própria conta E o próprio cadastro de vendedor. */
+      async cadastrarVendedor({ nome, email, telefone, tipo, grupo, codigo, senha, lembrar = true }) {
+        definirLembrarLogin(lembrar)
+        const limpo = String(email).trim().toLowerCase()
+        const { error } = await supabase.auth.signUp({ email: limpo, password: senha })
+        if (error) {
+          return { ok: false, erro: traduzirErro(error, 'Não foi possível criar a conta.') }
+        }
+        try {
+          await registrarVendedorAutonomo({ grupo, codigo, nome, email: limpo, telefone, tipo })
+        } catch (e) {
+          return { ok: false, erro: e.message }
+        }
         setAcesso(await carregarAcesso())
         return { ok: true, erro: '' }
       },

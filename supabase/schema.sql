@@ -137,10 +137,13 @@ alter table public.config add column if not exists primeiro_acerto date;
 --  Guardado como hash e SEM permissão de leitura para ninguém: só as funções
 --  abaixo (que rodam com privilégio elevado) conseguem comparar.
 create table if not exists public.codigos_acesso (
-  grupo         text primary key check (grupo in ('Alpha', 'Kombo')),
-  codigo_hash   text,
-  atualizado_em timestamptz not null default now()
+  grupo             text primary key check (grupo in ('Alpha', 'Kombo')),
+  codigo_hash       text,
+  codigo_vendedor_hash text,
+  atualizado_em     timestamptz not null default now()
 );
+
+alter table public.codigos_acesso add column if not exists codigo_vendedor_hash text;
 
 insert into public.codigos_acesso (grupo) values ('Alpha'), ('Kombo') on conflict (grupo) do nothing;
 
@@ -412,6 +415,95 @@ create or replace function public.codigo_definido(p_grupo text)
 returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.codigos_acesso where grupo = p_grupo and codigo_hash is not null)
+$$;
+
+/** Troca o código de autocadastro de vendedor do grupo. Só a liderança do grupo. */
+create or replace function public.definir_codigo_de_vendedor(p_grupo text, p_codigo text)
+returns void
+language plpgsql security definer
+set search_path = public, extensions
+as $$
+begin
+  if not (public.e_lider() and public.posso_ver(p_grupo)) then
+    raise exception 'Só a liderança do grupo pode mudar o código.';
+  end if;
+  if length(btrim(coalesce(p_codigo, ''))) < 6 then
+    raise exception 'O código precisa ter pelo menos 6 caracteres.';
+  end if;
+
+  update public.codigos_acesso
+     set codigo_vendedor_hash = crypt(btrim(p_codigo), gen_salt('bf')),
+         atualizado_em = now()
+   where grupo = p_grupo;
+end;
+$$;
+
+/** Autocadastro do vendedor: cria a própria conta E o próprio cadastro, num passo só. */
+create or replace function public.registrar_vendedor_autonomo(
+  p_grupo    text,
+  p_codigo   text,
+  p_nome     text,
+  p_email    text,
+  p_telefone text,
+  p_tipo     text
+)
+returns void
+language plpgsql security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash      text;
+  v_email     text := lower(btrim(p_email));
+  v_vendedor  public.vendedores%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception 'Faça o cadastro de e-mail e senha antes.';
+  end if;
+  if p_grupo not in ('Alpha', 'Kombo') then
+    raise exception 'Escolha Alpha ou Kombo.';
+  end if;
+  if exists (select 1 from public.perfis where id = auth.uid()) then
+    return;
+  end if;
+  if length(btrim(coalesce(p_nome, ''))) = 0 then
+    raise exception 'Digite seu nome.';
+  end if;
+  if length(btrim(coalesce(p_telefone, ''))) = 0 then
+    raise exception 'Digite seu telefone.';
+  end if;
+  if p_tipo not in ('adolescente', 'voluntario') then
+    raise exception 'Escolha adolescente ou voluntário.';
+  end if;
+
+  select codigo_vendedor_hash into v_hash from public.codigos_acesso where grupo = p_grupo;
+  if v_hash is null then
+    raise exception 'O grupo % ainda não tem código de cadastro definido.', p_grupo
+      using hint = 'Peça para a liderança criar o código em Configurações.';
+  end if;
+  if v_hash <> crypt(coalesce(p_codigo, ''), v_hash) then
+    raise exception 'Código incorreto.';
+  end if;
+
+  select * into v_vendedor from public.vendedores where lower(email) = v_email;
+
+  if found then
+    if v_vendedor.user_id is not null and v_vendedor.user_id <> auth.uid() then
+      raise exception 'Este e-mail já tem uma senha criada.'
+        using hint = 'Use "Entrar" em vez de se cadastrar.';
+    end if;
+    update public.vendedores
+       set user_id = auth.uid(), nome = btrim(p_nome), telefone = btrim(p_telefone), tipo = p_tipo
+     where id = v_vendedor.id
+    returning * into v_vendedor;
+  else
+    insert into public.vendedores (nome, email, telefone, tipo, grupo, user_id)
+    values (btrim(p_nome), v_email, btrim(p_telefone), p_tipo, p_grupo, auth.uid())
+    returning * into v_vendedor;
+  end if;
+
+  insert into public.perfis (id, nome, papel, grupo, vendedor_id)
+  values (auth.uid(), btrim(p_nome), 'vendedor', p_grupo, v_vendedor.id);
+end;
 $$;
 
 -- ============================================================================
@@ -863,6 +955,8 @@ grant insert, update, delete on public.perfis             to authenticated;
 revoke all on function public.registrar_lider(text, text, text)                     from public, anon;
 revoke all on function public.vincular_vendedor()                                   from public, anon;
 revoke all on function public.definir_codigo_de_lider(text, text)                   from public, anon;
+revoke all on function public.definir_codigo_de_vendedor(text, text)                from public, anon;
+revoke all on function public.registrar_vendedor_autonomo(text, text, text, text, text, text) from public, anon;
 revoke all on function public.registrar_venda(integer, text, text, text, text, text, uuid) from public, anon;
 revoke all on function public.assinar_termo(text, text) from public, anon;
 revoke all on function public.fechar_meta_do_vendedor(uuid, text)                   from public, anon;
@@ -872,6 +966,8 @@ revoke all on function public.apagar_dados_do_grupo(text)                       
 grant execute on function public.registrar_lider(text, text, text)                     to authenticated;
 grant execute on function public.vincular_vendedor()                                   to authenticated;
 grant execute on function public.definir_codigo_de_lider(text, text)                   to authenticated;
+grant execute on function public.definir_codigo_de_vendedor(text, text)                to authenticated;
+grant execute on function public.registrar_vendedor_autonomo(text, text, text, text, text, text) to authenticated;
 grant execute on function public.registrar_venda(integer, text, text, text, text, text, uuid) to authenticated;
 grant execute on function public.assinar_termo(text, text) to authenticated;
 grant execute on function public.fechar_meta_do_vendedor(uuid, text)                   to authenticated;
