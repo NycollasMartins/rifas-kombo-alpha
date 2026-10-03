@@ -4,7 +4,7 @@ import { useSessao } from '../../hooks/useSessao'
 import { definirCodigoDeLider, definirCodigoDeVendedor } from '../../lib/db/entrada'
 import { notificarVendedores } from '../../lib/db/notificacoes'
 import { formatarPrazo } from '../../utils/prazo'
-import { infoDoGrupo } from '../../utils/grupos'
+import { infoDoGrupo, KOMBO } from '../../utils/grupos'
 import { traduzirErro } from '../../lib/db/erros'
 import CartaoQrCode from './CartaoQrCode'
 
@@ -16,6 +16,8 @@ export default function AbaConfiguracoes() {
 
   const [preco, setPreco] = useState(String(config.precoRifa))
   const [metaPadrao, setMetaPadrao] = useState(String(config.metaPadrao))
+  const [precoChale, setPrecoChale] = useState(String(config.precoRifaChale))
+  const [metaChale, setMetaChale] = useState(String(config.metaChale))
   const [prazoFinal, setPrazoFinal] = useState(config.prazoFinal || '')
   const [premio, setPremio] = useState(config.premio || '')
   const [dataSorteio, setDataSorteio] = useState(config.dataSorteio || '')
@@ -98,6 +100,53 @@ export default function AbaConfiguracoes() {
           Salvar
         </button>
       </div>
+
+      {grupo === KOMBO && (
+        <div className="card">
+          <h2>Preço e meta — vendedores do chalé</h2>
+          <p className="texto-ajuda">
+            Vale só para quem está vendendo para ficar no chalé. Quem vende para o quarto normal
+            usa os valores do cartão acima.
+          </p>
+          <div className="field">
+            <label htmlFor="cfg-preco-chale">Preço de cada rifa (R$)</label>
+            <input
+              id="cfg-preco-chale"
+              type="number"
+              inputMode="decimal"
+              value={precoChale}
+              onChange={(e) => setPrecoChale(e.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="cfg-meta-chale">Meta padrão por pessoa (R$)</label>
+            <input
+              id="cfg-meta-chale"
+              type="number"
+              inputMode="decimal"
+              value={metaChale}
+              onChange={(e) => setMetaChale(e.target.value)}
+            />
+          </div>
+          <Recado cartao="valoresChale" />
+          <button
+            className="btn btn-primary"
+            onClick={() =>
+              tentar(
+                'valoresChale',
+                () =>
+                  salvarAjustes({
+                    precoRifaChale: parseFloat(precoChale) || 0,
+                    metaChale: parseFloat(metaChale) || 0,
+                  }),
+                'Salvo.'
+              )
+            }
+          >
+            Salvar
+          </button>
+        </div>
+      )}
 
       <div className="card">
         <h2>Prêmio e data do sorteio</h2>

@@ -8,7 +8,7 @@ import { agruparPorLote } from '../lib/db/vendas'
 import { gerarLinkDoComprovante } from '../lib/db/arquivos'
 import { montarMensagemDaCompra } from '../utils/whatsapp'
 import { formatarDataHora, formatarMoeda, formatarNumeroRifa, rotuloPagamento } from '../utils/formato'
-import { vendasDoVendedor } from '../utils/calculos'
+import { precoDoVendedor, vendasDoVendedor } from '../utils/calculos'
 import estilos from './ModalVendasDoVendedor.module.css'
 
 /**
@@ -59,7 +59,7 @@ export default function ModalVendasDoVendedor({ vendedor, aoFechar }) {
       ) : (
         lotes.map((lote) => {
           const v = lote.primeira
-          const valor = lote.rifas.length * config.precoRifa
+          const valor = lote.rifas.length * precoDoVendedor(vendedor, config)
           return (
             <div key={lote.loteId} className={estilos.compra}>
               <div className={estilos.topo}>

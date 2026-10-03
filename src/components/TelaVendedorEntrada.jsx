@@ -2,6 +2,7 @@ import { useState } from 'react'
 import BotaoVoltar from './BotaoVoltar'
 import SeletorDeGrupo from './SeletorDeGrupo'
 import { useSessao } from '../hooks/useSessao'
+import { rotuloDoTipo, KOMBO } from '../utils/grupos'
 
 /**
  * Entrada do vendedor.
@@ -20,6 +21,7 @@ export default function TelaVendedorEntrada({ aoVoltar }) {
   const [nome, setNome] = useState('')
   const [telefone, setTelefone] = useState('')
   const [tipo, setTipo] = useState('adolescente')
+  const [destino, setDestino] = useState('quarto')
   const [grupo, setGrupo] = useState('')
   const [codigo, setCodigo] = useState('')
   const [lembrar, setLembrar] = useState(true)
@@ -64,6 +66,7 @@ export default function TelaVendedorEntrada({ aoVoltar }) {
         email,
         telefone: telefone.trim(),
         tipo,
+        destino: grupo === KOMBO ? destino : 'quarto',
         grupo,
         codigo,
         senha,
@@ -130,15 +133,24 @@ export default function TelaVendedorEntrada({ aoVoltar }) {
                 onChange={(e) => setTelefone(e.target.value)}
               />
             </div>
+            <label className="rotulo-solto">Você é de qual grupo?</label>
+            <SeletorDeGrupo valor={grupo} aoEscolher={setGrupo} desabilitado={ocupado} />
             <div className="field">
               <label htmlFor="vend-tipo">Vai ao acampamento como</label>
               <select id="vend-tipo" value={tipo} onChange={(e) => setTipo(e.target.value)}>
-                <option value="adolescente">Adolescente</option>
+                <option value="adolescente">{grupo ? rotuloDoTipo(grupo) : 'Adolescente/Jovem'}</option>
                 <option value="voluntario">Voluntário (vai trabalhar)</option>
               </select>
             </div>
-            <label className="rotulo-solto">Você é de qual grupo?</label>
-            <SeletorDeGrupo valor={grupo} aoEscolher={setGrupo} desabilitado={ocupado} />
+            {grupo === KOMBO && (
+              <div className="field">
+                <label htmlFor="vend-destino">Vendendo para</label>
+                <select id="vend-destino" value={destino} onChange={(e) => setDestino(e.target.value)}>
+                  <option value="quarto">Quarto normal</option>
+                  <option value="chale">Chalé</option>
+                </select>
+              </div>
+            )}
           </>
         )}
 

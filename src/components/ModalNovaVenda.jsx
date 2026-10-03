@@ -5,6 +5,7 @@ import { useDadosRifa } from '../hooks/useDadosRifa'
 import { useSessao } from '../hooks/useSessao'
 import { enviarComprovante, novoLoteId, validarArquivo } from '../lib/db/arquivos'
 import { montarMensagemDaCompra } from '../utils/whatsapp'
+import { precoDoVendedor } from '../utils/calculos'
 import { formatarMoeda, formatarNumeroRifa } from '../utils/formato'
 import { traduzirErro } from '../lib/db/erros'
 import estilos from './ModalNovaVenda.module.css'
@@ -33,7 +34,8 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
   const [etapa, setEtapa] = useState('')
   const [resultado, setResultado] = useState(null)
 
-  const total = quantidade * config.precoRifa
+  const precoRifa = precoDoVendedor(vendedor, config)
+  const total = quantidade * precoRifa
 
   function ajustar(delta) {
     setQuantidade((q) => Math.max(1, Math.min(50, q + delta)))
@@ -199,7 +201,7 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
           </button>
         </div>
         <p className={estilos.total}>
-          {quantidade} × {formatarMoeda(config.precoRifa)} = <strong>{formatarMoeda(total)}</strong>
+          {quantidade} × {formatarMoeda(precoRifa)} = <strong>{formatarMoeda(total)}</strong>
         </p>
       </div>
 

@@ -7,6 +7,7 @@ import {
   meuVendedorId,
   podeCorrigirVenda,
   registrarLider,
+  redefinirSenhaDeVendedor,
   registrarVendedorAutonomo,
   vincularVendedor,
 } from '../lib/db/entrada'
@@ -179,15 +180,47 @@ export function ProvedorSessao({ children }) {
       },
 
       /** Autocadastro: a pessoa cria a própria conta E o próprio cadastro de vendedor. */
-      async cadastrarVendedor({ nome, email, telefone, tipo, grupo, codigo, senha, lembrar = true }) {
+      async cadastrarVendedor({
+        nome,
+        email,
+        telefone,
+        tipo,
+        destino,
+        grupo,
+        codigo,
+        senha,
+        lembrar = true,
+      }) {
         definirLembrarLogin(lembrar)
         const limpo = String(email).trim().toLowerCase()
         const { error } = await supabase.auth.signUp({ email: limpo, password: senha })
+
         if (error) {
-          return { ok: false, erro: traduzirErro(error, 'Não foi possível criar a conta.') }
+          // conta já existe — provável sobra de uma tentativa anterior que
+          // criou o login mas não terminou de vincular (código errado etc).
+          // Em vez de travar, entra com ela e tenta vincular de novo.
+          const jaExiste = String(error.message || '').includes('already registered')
+          if (!jaExiste) {
+            return { ok: false, erro: traduzirErro(error, 'Não foi possível criar a conta.') }
+          }
+          const entrada = await supabase.auth.signInWithPassword({ email: limpo, password: senha })
+          if (entrada.error) {
+            return {
+              ok: false,
+              erro: 'Este e-mail já tem conta, e a senha não confere. Use "Já tenho senha".',
+            }
+          }
         }
         try {
-          await registrarVendedorAutonomo({ grupo, codigo, nome, email: limpo, telefone, tipo })
+          await registrarVendedorAutonomo({
+            grupo,
+            codigo,
+            nome,
+            email: limpo,
+            telefone,
+            tipo,
+            destino,
+          })
         } catch (e) {
           return { ok: false, erro: e.message }
         }
@@ -220,6 +253,16 @@ export function ProvedorSessao({ children }) {
         try {
           await vincularVendedor()
           setAcesso(await carregarAcesso())
+          return { ok: true, erro: '' }
+        } catch (e) {
+          return { ok: false, erro: e.message }
+        }
+      },
+
+      /** Líder redefine a senha de um vendedor direto no app, sem e-mail. */
+      async redefinirSenhaDoVendedor(vendedorId, novaSenha) {
+        try {
+          await redefinirSenhaDeVendedor(vendedorId, novaSenha)
           return { ok: true, erro: '' }
         } catch (e) {
           return { ok: false, erro: e.message }

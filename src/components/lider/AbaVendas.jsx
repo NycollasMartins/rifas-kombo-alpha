@@ -5,6 +5,7 @@ import { useDadosRifa } from '../../hooks/useDadosRifa'
 import { gerarLinkDoComprovante } from '../../lib/db/arquivos'
 import { formatarNumeroRifa, rotuloPagamento } from '../../utils/formato'
 import { baixarCsvDeVendas } from '../../utils/csv'
+import { precoDoVendedor } from '../../utils/calculos'
 import { traduzirErro } from '../../lib/db/erros'
 import estilos from './AbaVendas.module.css'
 
@@ -181,7 +182,7 @@ export default function AbaVendas() {
         <ModalDetalheVenda
           venda={vendoDetalhe}
           vendedorNome={buscarVendedor(vendoDetalhe.vendedorId)?.nome}
-          precoRifa={config.precoRifa}
+          precoRifa={precoDoVendedor(buscarVendedor(vendoDetalhe.vendedorId), config)}
           aoFechar={() => setVendoDetalhe(null)}
         />
       )}

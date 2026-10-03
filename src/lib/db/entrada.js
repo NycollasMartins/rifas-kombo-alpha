@@ -83,7 +83,15 @@ export async function definirCodigoDeVendedor(grupo, codigo) {
 }
 
 /** Autocadastro: cria a própria conta de vendedor, com o código do grupo. */
-export async function registrarVendedorAutonomo({ grupo, codigo, nome, email, telefone, tipo }) {
+export async function registrarVendedorAutonomo({
+  grupo,
+  codigo,
+  nome,
+  email,
+  telefone,
+  tipo,
+  destino,
+}) {
   const { error } = await supabase.rpc('registrar_vendedor_autonomo', {
     p_grupo: grupo,
     p_codigo: codigo,
@@ -91,6 +99,15 @@ export async function registrarVendedorAutonomo({ grupo, codigo, nome, email, te
     p_email: email,
     p_telefone: telefone,
     p_tipo: tipo,
+    p_destino: destino || 'quarto',
   })
   if (error) throw new Error(traduzirErro(error, 'Não foi possível concluir o cadastro.'))
+}
+
+/** Líder redefine a senha de um vendedor direto no app, sem precisar de e-mail. */
+export async function redefinirSenhaDeVendedor(vendedorId, novaSenha) {
+  const { data, error } = await supabase.functions.invoke('redefinir-senha-vendedor', {
+    body: { vendedorId, novaSenha },
+  })
+  if (error) throw new Error(data?.error || traduzirErro(error, 'Não foi possível trocar a senha.'))
 }

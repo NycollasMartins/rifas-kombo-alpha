@@ -9,7 +9,7 @@ import ModalAssinarTermo from './ModalAssinarTermo'
 import ModalNovaVenda from './ModalNovaVenda'
 import { useDadosRifa } from '../hooks/useDadosRifa'
 import { useSessao } from '../hooks/useSessao'
-import { resumoDoVendedor, vendasDoVendedor } from '../utils/calculos'
+import { precoDoVendedor, resumoDoVendedor, vendasDoVendedor } from '../utils/calculos'
 import { agruparPorLote } from '../lib/db/vendas'
 import { formatarMoeda } from '../utils/formato'
 import { diasAte, formatarPrazo, prazoEncerrado } from '../utils/prazo'
@@ -102,7 +102,7 @@ export default function TelaVendedor() {
         <AvisoDePrazo
           prazoFinal={config.prazoFinal}
           faltante={resumo.faltante}
-          precoRifa={config.precoRifa}
+          precoRifa={precoDoVendedor(meuCadastro, config)}
           identificador={meuCadastro.id}
         />
       )}
@@ -143,7 +143,7 @@ export default function TelaVendedor() {
           <CompraDoVendedor
             key={lote.loteId}
             lote={lote}
-            precoRifa={config.precoRifa}
+            precoRifa={precoDoVendedor(meuCadastro, config)}
             nomeDoVendedor={meuCadastro.nome}
             grupo={grupo}
           />

@@ -6,6 +6,8 @@ import { verificar } from './erros'
 export const CONFIG_PADRAO = {
   precoRifa: 10,
   metaPadrao: 500,
+  precoRifaChale: 10,
+  metaChale: 500,
   prazoFinal: '',
   premio: '',
   dataSorteio: '',
@@ -18,6 +20,8 @@ export function mapearConfig(linha) {
     grupo: linha.grupo,
     precoRifa: Number(linha.preco_rifa) || 0,
     metaPadrao: Number(linha.meta_padrao) || 0,
+    precoRifaChale: Number(linha.preco_rifa_chale) || 0,
+    metaChale: Number(linha.meta_chale) || 0,
     prazoFinal: linha.prazo_final || '',
     premio: linha.premio || '',
     dataSorteio: linha.data_sorteio || '',
@@ -45,6 +49,8 @@ export async function salvarConfig(grupo, mudancas) {
   const linha = { updated_at: new Date().toISOString() }
   if (mudancas.precoRifa !== undefined) linha.preco_rifa = mudancas.precoRifa
   if (mudancas.metaPadrao !== undefined) linha.meta_padrao = mudancas.metaPadrao
+  if (mudancas.precoRifaChale !== undefined) linha.preco_rifa_chale = mudancas.precoRifaChale
+  if (mudancas.metaChale !== undefined) linha.meta_chale = mudancas.metaChale
   if (mudancas.prazoFinal !== undefined) linha.prazo_final = mudancas.prazoFinal || null
   if (mudancas.premio !== undefined) linha.premio = mudancas.premio || null
   if (mudancas.dataSorteio !== undefined) linha.data_sorteio = mudancas.dataSorteio || null

@@ -132,6 +132,9 @@ insert into public.config (grupo) values ('Alpha'), ('Kombo') on conflict (grupo
 alter table public.config add column if not exists premio text;
 alter table public.config add column if not exists data_sorteio date;
 alter table public.config add column if not exists primeiro_acerto date;
+-- preço/meta específicos de quem vende para ficar no chalé (só usado no Kombo)
+alter table public.config add column if not exists preco_rifa_chale numeric(10, 2) not null default 10;
+alter table public.config add column if not exists meta_chale numeric(10, 2) not null default 500;
 
 -- ---- codigos_acesso: a senha para virar líder de um grupo ------------------
 --  Guardado como hash e SEM permissão de leitura para ninguém: só as funções
@@ -171,6 +174,9 @@ alter table public.vendedores add column if not exists termo_digital_em timestam
 alter table public.vendedores add column if not exists acesso_enviado_em timestamptz;
 alter table public.vendedores add column if not exists tipo text not null default 'adolescente'
   check (tipo in ('adolescente', 'voluntario'));
+-- destino da venda, só relevante no Kombo: vai para um chalé ou para o quarto normal
+alter table public.vendedores add column if not exists destino text not null default 'quarto'
+  check (destino in ('quarto', 'chale'));
 
 -- ---- perfis: quem é quem depois de logar -----------------------------------
 --  dev      -> enxerga os dois grupos e corrige dados
@@ -439,13 +445,17 @@ end;
 $$;
 
 /** Autocadastro do vendedor: cria a própria conta E o próprio cadastro, num passo só. */
+-- a assinatura antiga (sem p_destino) fica como um overload morto se não remover
+drop function if exists public.registrar_vendedor_autonomo(text, text, text, text, text, text);
+
 create or replace function public.registrar_vendedor_autonomo(
   p_grupo    text,
   p_codigo   text,
   p_nome     text,
   p_email    text,
   p_telefone text,
-  p_tipo     text
+  p_tipo     text,
+  p_destino  text default 'quarto'
 )
 returns void
 language plpgsql security definer
@@ -454,6 +464,7 @@ as $$
 declare
   v_hash      text;
   v_email     text := lower(btrim(p_email));
+  v_destino   text := case when p_grupo = 'Kombo' and p_destino = 'chale' then 'chale' else 'quarto' end;
   v_vendedor  public.vendedores%rowtype;
 begin
   if auth.uid() is null then
@@ -492,12 +503,13 @@ begin
         using hint = 'Use "Entrar" em vez de se cadastrar.';
     end if;
     update public.vendedores
-       set user_id = auth.uid(), nome = btrim(p_nome), telefone = btrim(p_telefone), tipo = p_tipo
+       set user_id = auth.uid(), nome = btrim(p_nome), telefone = btrim(p_telefone), tipo = p_tipo,
+           destino = v_destino
      where id = v_vendedor.id
     returning * into v_vendedor;
   else
-    insert into public.vendedores (nome, email, telefone, tipo, grupo, user_id)
-    values (btrim(p_nome), v_email, btrim(p_telefone), p_tipo, p_grupo, auth.uid())
+    insert into public.vendedores (nome, email, telefone, tipo, grupo, user_id, destino)
+    values (btrim(p_nome), v_email, btrim(p_telefone), p_tipo, p_grupo, auth.uid(), v_destino)
     returning * into v_vendedor;
   end if;
 
@@ -956,7 +968,7 @@ revoke all on function public.registrar_lider(text, text, text)                 
 revoke all on function public.vincular_vendedor()                                   from public, anon;
 revoke all on function public.definir_codigo_de_lider(text, text)                   from public, anon;
 revoke all on function public.definir_codigo_de_vendedor(text, text)                from public, anon;
-revoke all on function public.registrar_vendedor_autonomo(text, text, text, text, text, text) from public, anon;
+revoke all on function public.registrar_vendedor_autonomo(text, text, text, text, text, text, text) from public, anon;
 revoke all on function public.registrar_venda(integer, text, text, text, text, text, uuid) from public, anon;
 revoke all on function public.assinar_termo(text, text) from public, anon;
 revoke all on function public.fechar_meta_do_vendedor(uuid, text)                   from public, anon;
@@ -967,7 +979,7 @@ grant execute on function public.registrar_lider(text, text, text)              
 grant execute on function public.vincular_vendedor()                                   to authenticated;
 grant execute on function public.definir_codigo_de_lider(text, text)                   to authenticated;
 grant execute on function public.definir_codigo_de_vendedor(text, text)                to authenticated;
-grant execute on function public.registrar_vendedor_autonomo(text, text, text, text, text, text) to authenticated;
+grant execute on function public.registrar_vendedor_autonomo(text, text, text, text, text, text, text) to authenticated;
 grant execute on function public.registrar_venda(integer, text, text, text, text, text, uuid) to authenticated;
 grant execute on function public.assinar_termo(text, text) to authenticated;
 grant execute on function public.fechar_meta_do_vendedor(uuid, text)                   to authenticated;

@@ -6,13 +6,14 @@ import BarraProgresso from '../BarraProgresso'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
 import {
   montarRanking,
+  precoDoVendedor,
   quemEstaDevendo,
   rankingDePrimeiros,
   rankingPorTalao,
   resumoGeral,
   separarPorDestino,
-  totalPago,
-  totalPendente,
+  totalPagoDoGrupo,
+  totalPendenteDoGrupo,
 } from '../../utils/calculos'
 import { formatarMoeda } from '../../utils/formato'
 import { formatarPrazo, prazoEncerrado, recadoDoPrazo, rifasParaFecharMeta } from '../../utils/prazo'
@@ -27,9 +28,9 @@ export default function AbaPainel() {
     [vendedores, vendas]
   )
 
-  const pagoVagas = totalPago(deVagas, config.precoRifa)
-  const pagoIgreja = totalPago(daIgreja, config.precoRifa)
-  const pendente = totalPendente(vendas, config.precoRifa)
+  const pagoVagas = totalPagoDoGrupo(deVagas, vendedores, config)
+  const pagoIgreja = totalPagoDoGrupo(daIgreja, vendedores, config)
+  const pendente = totalPendenteDoGrupo(vendas, vendedores, config)
   const geral = useMemo(() => resumoGeral(vendedores, vendas, config), [vendedores, vendas, config])
 
   const ranking = useMemo(
@@ -118,7 +119,7 @@ export default function AbaPainel() {
                 </div>
                 <div className={estilos.deve}>
                   <strong>{formatarMoeda(r.faltante)}</strong>
-                  <span>{rifasParaFecharMeta(r.faltante, config.precoRifa)} rifas</span>
+                  <span>{rifasParaFecharMeta(r.faltante, precoDoVendedor(r.vendedor, config))} rifas</span>
                 </div>
               </div>
             ))}

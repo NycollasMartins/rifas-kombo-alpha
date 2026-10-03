@@ -4,7 +4,9 @@ import EtiquetaSituacao from '../EtiquetaSituacao'
 import ModalVendedor from '../ModalVendedor'
 import ModalVendasDoVendedor from '../ModalVendasDoVendedor'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
-import { resumoDoVendedor, vendasDoVendedor } from '../../utils/calculos'
+import { useSessao } from '../../hooks/useSessao'
+import { precoDoVendedor, resumoDoVendedor, vendasDoVendedor } from '../../utils/calculos'
+import { rotuloDoTipo as rotuloDoTipoDoGrupo } from '../../utils/grupos'
 import { formatarMoeda } from '../../utils/formato'
 import { baixarCsvDeVendedores } from '../../utils/csv'
 import { rifasParaFecharMeta } from '../../utils/prazo'
@@ -14,6 +16,7 @@ import estilos from './AbaVendedores.module.css'
 /** Os vendedores do grupo: cadastro, termo, vendas e fechamento de meta. */
 export default function AbaVendedores() {
   const { config, vendedores, vendas, dadosPrivados, removerVendedor, fecharMeta } = useDadosRifa()
+  const { grupo } = useSessao()
 
   const [emEdicao, setEmEdicao] = useState(null) // 'novo' | vendedor
   const [vendoVendasDe, setVendoVendasDe] = useState(null)
@@ -26,7 +29,11 @@ export default function AbaVendedores() {
     () => (filtroTipo ? vendedores.filter((v) => v.tipo === filtroTipo) : vendedores),
     [vendedores, filtroTipo]
   )
-  const rotuloDoTipo = { '': '', adolescente: ' (adolescentes)', voluntario: ' (voluntários)' }[filtroTipo]
+  const rotuloDoTipo = {
+    '': '',
+    adolescente: ` (${rotuloDoTipoDoGrupo(grupo).toLowerCase()}s)`,
+    voluntario: ' (voluntários)',
+  }[filtroTipo]
 
   const filtrados = useMemo(() => {
     const termo = busca.trim().toLowerCase()
@@ -57,12 +64,13 @@ export default function AbaVendedores() {
   }
 
   async function fechar(resumo) {
-    const quantas = rifasParaFecharMeta(resumo.faltante, config.precoRifa)
+    const preco = precoDoVendedor(resumo.vendedor, config)
+    const quantas = rifasParaFecharMeta(resumo.faltante, preco)
     const confirmacao =
       `${resumo.vendedor.nome} arrecadou ${formatarMoeda(resumo.total)} de ` +
       `${formatarMoeda(resumo.meta)}.\n\n` +
       `Registrar ${quantas} rifa(s) no nome dele, totalizando ` +
-      `${formatarMoeda(quantas * config.precoRifa)}?\n\n` +
+      `${formatarMoeda(quantas * preco)}?\n\n` +
       'São rifas de verdade: entram no sorteio e no CSV.'
     if (!confirm(confirmacao)) return
 
@@ -107,7 +115,7 @@ export default function AbaVendedores() {
         <div className="filters">
           <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
             <option value="">Todos</option>
-            <option value="adolescente">Adolescentes</option>
+            <option value="adolescente">{rotuloDoTipoDoGrupo(grupo)}s</option>
             <option value="voluntario">Voluntários</option>
           </select>
           <input
@@ -159,7 +167,7 @@ export default function AbaVendedores() {
                   {podeFechar && (
                     <div className={estilos.faltante}>
                       faltam {formatarMoeda(resumo.faltante)} ·{' '}
-                      {rifasParaFecharMeta(resumo.faltante, config.precoRifa)} rifas
+                      {rifasParaFecharMeta(resumo.faltante, precoDoVendedor(vendedor, config))} rifas
                     </div>
                   )}
                 </div>

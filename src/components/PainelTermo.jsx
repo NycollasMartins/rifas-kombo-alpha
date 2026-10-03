@@ -3,6 +3,7 @@ import BotoesDoWhatsapp from './BotoesDoWhatsapp'
 import { useDadosRifa } from '../hooks/useDadosRifa'
 import { enviarTermo, gerarLinkDoTermo, removerTermo } from '../lib/db/arquivos'
 import { montarMensagemDoTermo } from '../utils/whatsapp'
+import { metaDoVendedor, precoDoVendedor } from '../utils/calculos'
 import { formatarPrazo } from '../utils/prazo'
 import estilos from './PainelTermo.module.css'
 
@@ -105,8 +106,8 @@ export default function PainelTermo({ vendedor }) {
             mensagem={montarMensagemDoTermo({
               nome: vendedor.nome,
               grupo: vendedor.grupo,
-              precoRifa: config.precoRifa,
-              meta: vendedor.meta ?? config.metaPadrao,
+              precoRifa: precoDoVendedor(vendedor, config),
+              meta: metaDoVendedor(vendedor, config),
               prazoFinal: config.prazoFinal,
             })}
             compacto

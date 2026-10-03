@@ -16,9 +16,18 @@ export function desistiu(vendedor) {
   return vendedor?.situacao === 'desistiu'
 }
 
+/** Vendedor de chalé (só existe no Kombo) usa o preço/meta padrão daquele destino. */
+export function ehChale(vendedor) {
+  return vendedor?.destino === 'chale'
+}
+
+export function precoDoVendedor(vendedor, config) {
+  return ehChale(vendedor) ? config.precoRifaChale : config.precoRifa
+}
+
 export function metaDoVendedor(vendedor, config) {
   if (!vendedor) return config.metaPadrao
-  return vendedor.meta || config.metaPadrao
+  return vendedor.meta || (ehChale(vendedor) ? config.metaChale : config.metaPadrao)
 }
 
 export function vendasDoVendedor(vendas, vendedorId) {
@@ -62,13 +71,14 @@ export function montarRanking(vendedores, vendas, config) {
 /** Tudo que se sabe sobre um vendedor, em números. */
 export function resumoDoVendedor(vendedor, vendas, config) {
   const minhasVendas = vendasDoVendedor(vendas, vendedor.id)
-  const total = totalPago(minhasVendas, config.precoRifa)
+  const preco = precoDoVendedor(vendedor, config)
+  const total = totalPago(minhasVendas, preco)
   const meta = metaDoVendedor(vendedor, config)
 
   return {
     vendedor,
     total,
-    pendente: totalPendente(minhasVendas, config.precoRifa),
+    pendente: totalPendente(minhasVendas, preco),
     quantidade: minhasVendas.length,
     quantidadePropria: minhasVendas.filter((v) => v.origem === 'propria').length,
     meta,
@@ -78,12 +88,33 @@ export function resumoDoVendedor(vendedor, vendas, config) {
   }
 }
 
+function mapaDeVendedores(vendedores) {
+  return new Map(vendedores.map((v) => [v.id, v]))
+}
+
+/** Soma vendas de vendedores com preços diferentes (chalé x quarto normal). */
+function somarPorPreco(vendas, status, vendedores, config) {
+  const mapa = mapaDeVendedores(vendedores)
+  return vendas
+    .filter((v) => v.status === status)
+    .reduce((soma, v) => soma + precoDoVendedor(mapa.get(v.vendedorId), config), 0)
+}
+
+export function totalPagoDoGrupo(vendas, vendedores, config) {
+  return somarPorPreco(vendas, 'pago', vendedores, config)
+}
+
+export function totalPendenteDoGrupo(vendas, vendedores, config) {
+  return somarPorPreco(vendas, 'pendente', vendedores, config)
+}
+
 /** Números do grupo inteiro, já sem os desistentes. */
 export function resumoGeral(vendedores, vendas, config) {
   const naDisputa = vendedoresNaDisputa(vendedores)
-  const ids = new Set(naDisputa.map((v) => v.id))
-  const doGrupo = vendas.filter((s) => ids.has(s.vendedorId))
-  const pago = totalPago(doGrupo, config.precoRifa)
+  const pago = naDisputa.reduce(
+    (soma, v) => soma + totalPago(vendasDoVendedor(vendas, v.id), precoDoVendedor(v, config)),
+    0
+  )
   const meta = naDisputa.reduce((soma, v) => soma + metaDoVendedor(v, config), 0)
 
   return {
@@ -118,9 +149,10 @@ function dataDeConclusao(vendedor, vendas, config) {
     .filter((v) => v.status === 'pago')
     .sort((a, b) => new Date(a.data) - new Date(b.data))
 
+  const preco = precoDoVendedor(vendedor, config)
   let total = 0
   for (const v of pagas) {
-    total += config.precoRifa
+    total += preco
     if (total >= meta) return v.data
   }
   return null

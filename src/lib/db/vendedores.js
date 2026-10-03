@@ -9,6 +9,7 @@ export function mapearVendedor(linha) {
     telefone: linha.telefone || '',
     tipo: linha.tipo || 'adolescente',
     grupo: linha.grupo,
+    destino: linha.destino || 'quarto',
     meta: linha.meta === null || linha.meta === undefined ? null : Number(linha.meta),
     situacao: linha.situacao || 'ativo',
     // preenchido quando a pessoa cria a senha dela no primeiro acesso
@@ -31,7 +32,7 @@ function normalizarEmail(email) {
   return String(email || '').trim().toLowerCase()
 }
 
-export async function criarVendedor({ nome, email, telefone, tipo, grupo, meta }) {
+export async function criarVendedor({ nome, email, telefone, tipo, grupo, meta, destino }) {
   const linha = verificar(
     await supabase
       .from('vendedores')
@@ -42,6 +43,7 @@ export async function criarVendedor({ nome, email, telefone, tipo, grupo, meta }
         tipo: tipo || 'adolescente',
         grupo,
         meta: meta ?? null,
+        destino: destino || 'quarto',
       })
       .select()
       .single(),
@@ -52,7 +54,7 @@ export async function criarVendedor({ nome, email, telefone, tipo, grupo, meta }
 
 export async function atualizarVendedor(
   id,
-  { nome, email, telefone, tipo, meta, situacao, acessoEnviadoEm }
+  { nome, email, telefone, tipo, meta, situacao, acessoEnviadoEm, destino }
 ) {
   const mudancas = {}
   if (nome !== undefined) mudancas.nome = nome
@@ -62,6 +64,7 @@ export async function atualizarVendedor(
   if (meta !== undefined) mudancas.meta = meta ?? null
   if (situacao !== undefined) mudancas.situacao = situacao
   if (acessoEnviadoEm !== undefined) mudancas.acesso_enviado_em = acessoEnviadoEm || null
+  if (destino !== undefined) mudancas.destino = destino
 
   const linha = verificar(
     await supabase.from('vendedores').update(mudancas).eq('id', id).select().single(),

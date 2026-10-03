@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Modal from './Modal'
 import { useDadosRifa } from '../hooks/useDadosRifa'
 import { montarMensagemDoTermo } from '../utils/whatsapp'
+import { metaDoVendedor, precoDoVendedor } from '../utils/calculos'
 import { traduzirErro } from '../lib/db/erros'
 
 /**
@@ -18,8 +19,8 @@ export default function ModalAssinarTermo({ vendedor, grupo, aoFechar }) {
   const texto = montarMensagemDoTermo({
     nome: vendedor.nome,
     grupo,
-    precoRifa: config.precoRifa,
-    meta: vendedor.meta ?? config.metaPadrao,
+    precoRifa: precoDoVendedor(vendedor, config),
+    meta: metaDoVendedor(vendedor, config),
     prazoFinal: config.prazoFinal,
   })
 

@@ -4,8 +4,9 @@ import PainelTermo from './PainelTermo'
 import BotoesDoWhatsapp from './BotoesDoWhatsapp'
 import { useDadosRifa } from '../hooks/useDadosRifa'
 import { useSessao } from '../hooks/useSessao'
-import { infoDoGrupo } from '../utils/grupos'
+import { infoDoGrupo, rotuloDoTipo, KOMBO } from '../utils/grupos'
 import { montarMensagemDeAcesso, montarMensagemDoTermo } from '../utils/whatsapp'
+import { metaDoVendedor, precoDoVendedor } from '../utils/calculos'
 import { traduzirErro } from '../lib/db/erros'
 import { formatarDataHora } from '../utils/formato'
 
@@ -29,7 +30,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
     buscarDadosPrivados,
     salvarPrivadoDoVendedor,
   } = useDadosRifa()
-  const { grupo } = useSessao()
+  const { grupo, redefinirSenhaDoVendedor } = useSessao()
 
   const editando = Boolean(vendedor)
   const privado = editando ? buscarDadosPrivados(vendedor.id) : null
@@ -38,12 +39,34 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
   const [email, setEmail] = useState(vendedor?.email || '')
   const [telefone, setTelefone] = useState(vendedor?.telefone || '')
   const [tipo, setTipo] = useState(vendedor?.tipo || 'adolescente')
-  const [meta, setMeta] = useState(String(vendedor?.meta ?? config.metaPadrao))
+  const [destino, setDestino] = useState(vendedor?.destino || 'quarto')
+  const [meta, setMeta] = useState(
+    String(vendedor?.meta ?? (destino === 'chale' ? config.metaChale : config.metaPadrao))
+  )
   const [situacao, setSituacao] = useState(vendedor?.situacao || 'ativo')
   const [observacao, setObservacao] = useState(privado?.observacao || '')
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [vendedorCriado, setVendedorCriado] = useState(null)
+  const [novaSenhaVendedor, setNovaSenhaVendedor] = useState('')
+  const [redefinindo, setRedefinindo] = useState(false)
+  const [recadoSenha, setRecadoSenha] = useState('')
+
+  async function redefinirSenha() {
+    if (novaSenhaVendedor.length < 6) {
+      return setRecadoSenha('A senha precisa ter pelo menos 6 caracteres.')
+    }
+    setRedefinindo(true)
+    setRecadoSenha('')
+    const r = await redefinirSenhaDoVendedor(vendedor.id, novaSenhaVendedor)
+    setRedefinindo(false)
+    if (r.ok) {
+      setNovaSenhaVendedor('')
+      setRecadoSenha('Senha atualizada. Avise o vendedor pelo WhatsApp.')
+    } else {
+      setRecadoSenha(r.erro)
+    }
+  }
 
   // marca que a mensagem de acesso foi enviada — só quando o líder de fato toca em enviar
   function marcarAcessoEnviado(id) {
@@ -64,6 +87,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
       email: email.trim(),
       telefone: telefone.trim(),
       tipo,
+      destino: grupo === KOMBO ? destino : 'quarto',
       meta: parseFloat(meta) || config.metaPadrao,
     }
 
@@ -129,8 +153,8 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
           mensagem={montarMensagemDoTermo({
             nome: vendedorCriado.nome,
             grupo,
-            precoRifa: config.precoRifa,
-            meta: vendedorCriado.meta ?? config.metaPadrao,
+            precoRifa: precoDoVendedor(vendedorCriado, config),
+            meta: metaDoVendedor(vendedorCriado, config),
             prazoFinal: config.prazoFinal,
           })}
         />
@@ -207,10 +231,30 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
       <div className="field">
         <label htmlFor="vendedor-tipo">Vai ao acampamento como</label>
         <select id="vendedor-tipo" value={tipo} onChange={(e) => setTipo(e.target.value)}>
-          <option value="adolescente">Adolescente</option>
+          <option value="adolescente">{rotuloDoTipo(grupo)}</option>
           <option value="voluntario">Voluntário</option>
         </select>
       </div>
+
+      {grupo === KOMBO && (
+        <div className="field">
+          <label htmlFor="vendedor-destino">Vendendo para</label>
+          <select
+            id="vendedor-destino"
+            value={destino}
+            onChange={(e) => {
+              const novoDestino = e.target.value
+              setDestino(novoDestino)
+              if (!editando) {
+                setMeta(String(novoDestino === 'chale' ? config.metaChale : config.metaPadrao))
+              }
+            }}
+          >
+            <option value="quarto">Quarto normal</option>
+            <option value="chale">Chalé</option>
+          </select>
+        </div>
+      )}
 
       <div className="field">
         <label htmlFor="vendedor-meta">Meta (R$)</label>
@@ -274,6 +318,41 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
               compacto
             />
           </div>
+
+          {vendedor.temSenha && (
+            <div className="field">
+              <label htmlFor="vendedor-nova-senha">Redefinir senha dele(a)</label>
+              <p className="texto-ajuda" style={{ margin: '0 0 8px' }}>
+                Cria uma senha nova direto no sistema — não envia nada por e-mail. Avise o
+                vendedor da senha nova por fora.
+              </p>
+              <input
+                id="vendedor-nova-senha"
+                type="text"
+                autoComplete="off"
+                placeholder="Pelo menos 6 caracteres"
+                value={novaSenhaVendedor}
+                onChange={(e) => setNovaSenhaVendedor(e.target.value)}
+              />
+              {recadoSenha && (
+                <p
+                  className="error-text"
+                  style={{ color: recadoSenha.startsWith('Senha atualizada') ? 'var(--good)' : 'var(--bad)' }}
+                >
+                  {recadoSenha}
+                </p>
+              )}
+              <button
+                type="button"
+                className="btn"
+                style={{ marginTop: 8 }}
+                onClick={redefinirSenha}
+                disabled={redefinindo}
+              >
+                {redefinindo ? 'Salvando…' : 'Redefinir senha'}
+              </button>
+            </div>
+          )}
 
           <PainelTermo vendedor={vendedor} />
         </>
