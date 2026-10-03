@@ -6,7 +6,7 @@ import ModalVendasDoVendedor from '../ModalVendasDoVendedor'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
 import { useSessao } from '../../hooks/useSessao'
 import { precoDoVendedor, resumoDoVendedor, vendasDoVendedor } from '../../utils/calculos'
-import { rotuloDoTipo as rotuloDoTipoDoGrupo } from '../../utils/grupos'
+import { rotuloDoTipoPlural } from '../../utils/grupos'
 import { formatarMoeda } from '../../utils/formato'
 import { baixarCsvDeVendedores } from '../../utils/csv'
 import { rifasParaFecharMeta } from '../../utils/prazo'
@@ -31,7 +31,7 @@ export default function AbaVendedores() {
   )
   const rotuloDoTipo = {
     '': '',
-    adolescente: ` (${rotuloDoTipoDoGrupo(grupo).toLowerCase()}s)`,
+    adolescente: ` (${rotuloDoTipoPlural(grupo).toLowerCase()})`,
     voluntario: ' (voluntários)',
   }[filtroTipo]
 
@@ -115,7 +115,7 @@ export default function AbaVendedores() {
         <div className="filters">
           <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
             <option value="">Todos</option>
-            <option value="adolescente">{rotuloDoTipoDoGrupo(grupo)}s</option>
+            <option value="adolescente">{rotuloDoTipoPlural(grupo)}</option>
             <option value="voluntario">Voluntários</option>
           </select>
           <input
