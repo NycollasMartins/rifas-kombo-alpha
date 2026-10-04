@@ -1,5 +1,5 @@
-import { supabase } from '../supabase'
-import { verificar } from './erros'
+import { supabase, supabaseAnonimo } from '../supabase'
+import { traduzirErro, verificar } from './erros'
 
 /**
  * Quem já garantiu vaga no acampamento — pagando o ingresso direto, ou
@@ -90,23 +90,20 @@ export async function atualizarInscricao(id, { telefone, pagamento, valor, statu
  * outra coisa pela API. Confirmar o pagamento é sempre o dev, depois.
  */
 export async function criarInscricaoPublica({ grupo, nome, telefone }) {
-  const linha = verificar(
-    await supabase
-      .from('inscricoes')
-      .insert({
-        grupo,
-        nome,
-        telefone: telefone || null,
-        forma: 'direto',
-        pagamento: 'dinheiro',
-        valor: 0,
-        status: 'pendente',
-      })
-      .select()
-      .single(),
-    'Não foi possível enviar a inscrição.'
-  )
-  return mapearInscricao(linha)
+  // cliente isolado, sem sessão — mesmo que este aparelho já tenha um login
+  // de líder salvo, este pedido precisa valer como anônimo de verdade
+  const { error } = await supabaseAnonimo.from('inscricoes').insert({
+    grupo,
+    nome,
+    telefone: telefone || null,
+    forma: 'direto',
+    pagamento: 'dinheiro',
+    valor: 0,
+    status: 'pendente',
+  })
+  // sem permissão de leitura aqui (de propósito) — por isso não dá pra
+  // devolver a linha criada, só confirmar que não deu erro
+  if (error) throw new Error(traduzirErro(error, 'Não foi possível enviar a inscrição.'))
 }
 
 export async function excluirInscricao(id) {
