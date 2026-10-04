@@ -178,6 +178,11 @@ alter table public.vendedores add column if not exists tipo text not null defaul
 alter table public.vendedores add column if not exists destino text not null default 'quarto'
   check (destino in ('quarto', 'chale'));
 
+-- "inscrito" = já garantiu a vaga (direto ou vendendo todas as rifas) e sai da lista de quem ainda vende
+alter table public.vendedores drop constraint if exists vendedores_situacao_check;
+alter table public.vendedores add constraint vendedores_situacao_check
+  check (situacao in ('ativo', 'quitou', 'desistiu', 'inscrito'));
+
 -- ---- perfis: quem é quem depois de logar -----------------------------------
 --  dev      -> enxerga os dois grupos e corrige dados
 --  lider    -> enxerga só o próprio grupo
@@ -254,6 +259,27 @@ create table if not exists public.sorteios (
   venda_id uuid references public.vendas (id) on delete set null,
   data     timestamptz not null default now()
 );
+
+-- ---- inscricoes -------------------------------------------------------------
+--  Quem já garantiu vaga no acampamento: pagando o ingresso direto, ou
+--  vendendo todas as rifas (nesse caso ligado ao vendedor de origem).
+--  Fase de teste: só o dev lê e escreve aqui (ver políticas de RLS abaixo).
+create table if not exists public.inscricoes (
+  id               uuid primary key default gen_random_uuid(),
+  grupo            text not null check (grupo in ('Alpha', 'Kombo')),
+  nome             text not null check (length(btrim(nome)) > 0),
+  telefone         text,
+  forma            text not null check (forma in ('direto', 'rifa')),
+  pagamento        text not null default 'dinheiro' check (pagamento in ('dinheiro', 'pix')),
+  valor            numeric(10, 2) not null default 0,
+  status           text not null default 'pago' check (status in ('pago', 'pendente')),
+  comprovante_path text,
+  vendedor_id      uuid references public.vendedores (id) on delete set null,
+  observacao       text,
+  criado_em        timestamptz not null default now()
+);
+
+create index if not exists inscricoes_grupo_idx on public.inscricoes (grupo);
 
 -- ============================================================================
 --  3. QUEM SOU EU
@@ -795,6 +821,7 @@ begin
     raise exception 'Só a liderança do grupo pode apagar os dados dele.';
   end if;
 
+  delete from public.inscricoes where grupo = p_grupo;
   delete from public.sorteios where grupo = p_grupo;
   delete from public.vendas   where grupo = p_grupo;
   delete from public.vendedores where grupo = p_grupo;
@@ -819,6 +846,7 @@ alter table public.vendedores_privado  enable row level security;
 alter table public.vendas              enable row level security;
 alter table public.sorteios            enable row level security;
 alter table public.inscricoes_push     enable row level security;
+alter table public.inscricoes          enable row level security;
 
 -- ---- config ----------------------------------------------------------------
 drop policy if exists "config: só o meu grupo" on public.config;
@@ -939,6 +967,15 @@ create policy "sorteios: a liderança sorteia"
   on public.sorteios for insert to authenticated
   with check (public.e_lider() and public.posso_ver(grupo));
 
+-- ---- inscricoes ---------------------------------------------------------------
+--  Fase de teste: só o dev. Quando for liberar pra liderança, troca
+--  "public.e_dev()" por "public.e_lider() and public.posso_ver(grupo)" aqui.
+drop policy if exists "inscricoes: só o dev, por enquanto" on public.inscricoes;
+create policy "inscricoes: só o dev, por enquanto"
+  on public.inscricoes for all to authenticated
+  using (public.e_dev())
+  with check (public.e_dev());
+
 -- ============================================================================
 --  9. PERMISSÕES DE TABELA
 -- ----------------------------------------------------------------------------
@@ -949,12 +986,14 @@ create policy "sorteios: a liderança sorteia"
 grant usage on schema public to anon, authenticated;
 
 revoke all on public.config, public.codigos_acesso, public.perfis, public.vendedores,
-              public.vendedores_privado, public.vendas, public.sorteios, public.inscricoes_push
+              public.vendedores_privado, public.vendas, public.sorteios, public.inscricoes_push,
+              public.inscricoes
   from anon, authenticated;
 
 grant select on public.config, public.vendedores, public.vendas, public.sorteios, public.perfis
   to authenticated;
 grant select, insert, delete on public.inscricoes_push to authenticated;
+grant select, insert, update, delete on public.inscricoes to authenticated;
 
 grant update                 on public.config             to authenticated;
 grant insert, update, delete on public.vendedores         to authenticated;

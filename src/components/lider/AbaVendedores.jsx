@@ -3,6 +3,7 @@ import EstadoVazio from '../EstadoVazio'
 import EtiquetaSituacao from '../EtiquetaSituacao'
 import ModalVendedor from '../ModalVendedor'
 import ModalVendasDoVendedor from '../ModalVendasDoVendedor'
+import ModalInscricao from '../ModalInscricao'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
 import { useSessao } from '../../hooks/useSessao'
 import { precoDoVendedor, resumoDoVendedor, vendasDoVendedor } from '../../utils/calculos'
@@ -15,11 +16,19 @@ import estilos from './AbaVendedores.module.css'
 
 /** Os vendedores do grupo: cadastro, termo, vendas e fechamento de meta. */
 export default function AbaVendedores() {
-  const { config, vendedores, vendas, dadosPrivados, removerVendedor, fecharMeta } = useDadosRifa()
-  const { grupo } = useSessao()
+  const { config, vendedores: todosDoGrupo, vendas, dadosPrivados, removerVendedor, fecharMeta } =
+    useDadosRifa()
+  const { grupo, eDev } = useSessao()
+
+  // Quem já virou inscrito some daqui — ele mora na aba Inscrições agora.
+  const vendedores = useMemo(
+    () => todosDoGrupo.filter((v) => v.situacao !== 'inscrito'),
+    [todosDoGrupo]
+  )
 
   const [emEdicao, setEmEdicao] = useState(null) // 'novo' | vendedor
   const [vendoVendasDe, setVendoVendasDe] = useState(null)
+  const [inscrevendo, setInscrevendo] = useState(null) // { vendedor, precisaFechar }
   const [erro, setErro] = useState('')
   const [ocupado, setOcupado] = useState('')
   const [busca, setBusca] = useState('')
@@ -185,6 +194,16 @@ export default function AbaVendedores() {
                       {ocupado === vendedor.id ? '…' : 'Fechar meta'}
                     </button>
                   )}
+                  {eDev && vendedor.situacao === 'ativo' && (
+                    <button
+                      className="btn btn-sm"
+                      onClick={() =>
+                        setInscrevendo({ vendedor, precisaFechar: resumo.faltante > 0 })
+                      }
+                    >
+                      Inscrever
+                    </button>
+                  )}
                   <button className="btn-ghost btn-sm" onClick={() => setEmEdicao(vendedor)}>
                     Editar
                   </button>
@@ -209,6 +228,15 @@ export default function AbaVendedores() {
         <ModalVendasDoVendedor
           vendedor={vendoVendasDe}
           aoFechar={() => setVendoVendasDe(null)}
+        />
+      )}
+
+      {inscrevendo && (
+        <ModalInscricao
+          vendedor={inscrevendo.vendedor}
+          precisaFechar={inscrevendo.precisaFechar}
+          valorSugerido={resumoDoVendedor(inscrevendo.vendedor, vendas, config).meta}
+          aoFechar={() => setInscrevendo(null)}
         />
       )}
     </>
