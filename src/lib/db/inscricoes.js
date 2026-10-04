@@ -69,6 +69,46 @@ export async function criarInscricao({
   return mapearInscricao(linha)
 }
 
+export async function atualizarInscricao(id, { telefone, pagamento, valor, status, comprovantePath }) {
+  const mudancas = {}
+  if (telefone !== undefined) mudancas.telefone = telefone || null
+  if (pagamento !== undefined) mudancas.pagamento = pagamento
+  if (valor !== undefined) mudancas.valor = valor
+  if (status !== undefined) mudancas.status = status
+  if (comprovantePath !== undefined) mudancas.comprovante_path = comprovantePath || null
+
+  const linha = verificar(
+    await supabase.from('inscricoes').update(mudancas).eq('id', id).select().single(),
+    'Não foi possível salvar a inscrição.'
+  )
+  return mapearInscricao(linha)
+}
+
+/**
+ * Formulário público (QR code): qualquer um pode criar, mas só um pedido
+ * pendente, sem valor — o RLS garante isso mesmo se alguém tentar forçar
+ * outra coisa pela API. Confirmar o pagamento é sempre o dev, depois.
+ */
+export async function criarInscricaoPublica({ grupo, nome, telefone }) {
+  const linha = verificar(
+    await supabase
+      .from('inscricoes')
+      .insert({
+        grupo,
+        nome,
+        telefone: telefone || null,
+        forma: 'direto',
+        pagamento: 'dinheiro',
+        valor: 0,
+        status: 'pendente',
+      })
+      .select()
+      .single(),
+    'Não foi possível enviar a inscrição.'
+  )
+  return mapearInscricao(linha)
+}
+
 export async function excluirInscricao(id) {
   verificar(
     await supabase.from('inscricoes').delete().eq('id', id),

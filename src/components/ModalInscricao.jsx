@@ -7,24 +7,29 @@ import { traduzirErro } from '../lib/db/erros'
 import { formatarMoeda } from '../utils/formato'
 
 /**
- * Registra uma inscrição no acampamento.
+ * Registra ou confirma uma inscrição no acampamento.
  *
- * Dois jeitos de chegar aqui: alguém pagou o ingresso direto (sem vendedor
- * ligado), ou um vendedor fechou a conta das rifas e está virando inscrito
- * — nesse caso o nome vem fixo e, ao salvar, ele sai da lista de vendedores.
+ * Três jeitos de chegar aqui: alguém pagou o ingresso direto na hora (sem
+ * vendedor ligado); um vendedor fechou a conta das rifas e está virando
+ * inscrito (nome fixo, sai da lista de vendedores); ou alguém preencheu o
+ * formulário público (QR code) e está "pendente" — aqui o dev confirma que
+ * recebeu o pagamento pessoalmente e completa o valor.
  */
-export default function ModalInscricao({ vendedor, precisaFechar, valorSugerido, aoFechar }) {
+export default function ModalInscricao({ vendedor, precisaFechar, valorSugerido, inscricaoExistente, aoFechar }) {
   const { grupo } = useSessao()
-  const { adicionarInscricao, inscreverVendedorPorRifa } = useDadosRifa()
+  const { adicionarInscricao, inscreverVendedorPorRifa, editarInscricao } = useDadosRifa()
 
-  const [nome, setNome] = useState(vendedor?.nome || '')
-  const [telefone, setTelefone] = useState(vendedor?.telefone || '')
-  const [pagamento, setPagamento] = useState('dinheiro')
+  const nome0 = vendedor?.nome || inscricaoExistente?.nome || ''
+  const [nome, setNome] = useState(nome0)
+  const [telefone, setTelefone] = useState(vendedor?.telefone || inscricaoExistente?.telefone || '')
+  const [pagamento, setPagamento] = useState(inscricaoExistente?.pagamento || 'dinheiro')
   const [status, setStatus] = useState('pago')
-  const [valor, setValor] = useState(String(valorSugerido || ''))
+  const [valor, setValor] = useState(String(valorSugerido || inscricaoExistente?.valor || ''))
   const [arquivo, setArquivo] = useState(null)
   const [erro, setErro] = useState('')
   const [etapa, setEtapa] = useState('')
+
+  const nomeFixo = Boolean(vendedor || inscricaoExistente)
 
   function escolherArquivo(evento) {
     const escolhido = evento.target.files?.[0]
@@ -37,34 +42,36 @@ export default function ModalInscricao({ vendedor, precisaFechar, valorSugerido,
   }
 
   async function salvar() {
-    if (!vendedor && !nome.trim()) return setErro('Digite o nome da pessoa.')
+    if (!nomeFixo && !nome.trim()) return setErro('Digite o nome da pessoa.')
     if (!valor || parseFloat(valor) <= 0) return setErro('Informe o valor pago.')
 
     setErro('')
     try {
-      let comprovantePath = ''
-      const idTemporario = globalThis.crypto?.randomUUID?.() || String(Date.now())
-
-      if (arquivo) {
-        setEtapa('Enviando comprovante…')
-        comprovantePath = await enviarComprovanteDeInscricao(
-          vendedor?.grupo || grupo,
-          idTemporario,
-          arquivo
-        )
-      }
+      const idTemporario = inscricaoExistente?.id || globalThis.crypto?.randomUUID?.() || String(Date.now())
 
       const dados = {
         telefone: telefone.trim(),
         pagamento,
         valor: parseFloat(valor),
         status,
-        comprovantePath,
+      }
+
+      if (arquivo) {
+        setEtapa('Enviando comprovante…')
+        dados.comprovantePath = await enviarComprovanteDeInscricao(
+          vendedor?.grupo || inscricaoExistente?.grupo || grupo,
+          idTemporario,
+          arquivo
+        )
+      } else if (!inscricaoExistente) {
+        dados.comprovantePath = ''
       }
 
       setEtapa('Salvando…')
       if (vendedor) {
         await inscreverVendedorPorRifa(vendedor, dados, precisaFechar)
+      } else if (inscricaoExistente) {
+        await editarInscricao(inscricaoExistente.id, dados)
       } else {
         await adicionarInscricao({ ...dados, nome: nome.trim() })
       }
@@ -78,7 +85,13 @@ export default function ModalInscricao({ vendedor, precisaFechar, valorSugerido,
 
   return (
     <Modal
-      titulo={vendedor ? `Inscrever ${vendedor.nome}` : 'Nova inscrição'}
+      titulo={
+        vendedor
+          ? `Inscrever ${vendedor.nome}`
+          : inscricaoExistente
+            ? `Confirmar pagamento — ${inscricaoExistente.nome}`
+            : 'Nova inscrição'
+      }
       aoFechar={aoFechar}
       rodape={
         <>
@@ -98,7 +111,18 @@ export default function ModalInscricao({ vendedor, precisaFechar, valorSugerido,
         </p>
       )}
 
-      {!vendedor && (
+      {inscricaoExistente && (
+        <p className="texto-ajuda">
+          Ela preencheu o formulário e está esperando você confirmar o pagamento pessoalmente.
+        </p>
+      )}
+
+      {nomeFixo ? (
+        <div className="field">
+          <label>Nome</label>
+          <p>{nome}</p>
+        </div>
+      ) : (
         <div className="field">
           <label htmlFor="insc-nome">Nome</label>
           <input

@@ -976,6 +976,21 @@ create policy "inscricoes: só o dev, por enquanto"
   using (public.e_dev())
   with check (public.e_dev());
 
+-- Formulário público (QR code): qualquer um pode CRIAR um pedido pendente,
+-- mas só isso — nunca ler, trocar ou apagar. Só entra como "pendente", sem
+-- valor e sem vendedor ligado; quem confirma o pagamento e vira inscrição de
+-- verdade é sempre o dev, pela policy de cima.
+drop policy if exists "inscricoes: formulário público só cria pendente" on public.inscricoes;
+create policy "inscricoes: formulário público só cria pendente"
+  on public.inscricoes for insert to anon
+  with check (
+    grupo in ('Alpha', 'Kombo')
+    and forma = 'direto'
+    and status = 'pendente'
+    and valor = 0
+    and vendedor_id is null
+  );
+
 -- ============================================================================
 --  9. PERMISSÕES DE TABELA
 -- ----------------------------------------------------------------------------
@@ -994,6 +1009,7 @@ grant select on public.config, public.vendedores, public.vendas, public.sorteios
   to authenticated;
 grant select, insert, delete on public.inscricoes_push to authenticated;
 grant select, insert, update, delete on public.inscricoes to authenticated;
+grant insert on public.inscricoes to anon;
 
 grant update                 on public.config             to authenticated;
 grant insert, update, delete on public.vendedores         to authenticated;

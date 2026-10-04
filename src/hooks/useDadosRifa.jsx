@@ -22,7 +22,12 @@ import { listarSorteios, registrarSorteio } from '../lib/db/sorteios'
 import { assinarTermo } from '../lib/db/entrada'
 import { listarDadosPrivados, salvarDadosPrivados } from '../lib/db/vendedoresPrivado'
 import { apagarDadosDoGrupo, fecharMetaDoVendedor, transferirVendas } from '../lib/db/fechamento'
-import { criarInscricao, excluirInscricao, listarInscricoes } from '../lib/db/inscricoes'
+import {
+  atualizarInscricao,
+  criarInscricao,
+  excluirInscricao,
+  listarInscricoes,
+} from '../lib/db/inscricoes'
 import { traduzirErro } from '../lib/db/erros'
 import { useSessao } from './useSessao'
 
@@ -284,6 +289,13 @@ export function ProvedorDadosRifa({ children }) {
         setTodosVendedores((a) => mesclar(a, atualizado))
         if (precisaFechar) await carregarTudo({ silencioso: true })
         return nova
+      },
+
+      /** Confirmar pagamento de uma inscrição direta pendente, ou corrigir uma. */
+      async editarInscricao(id, dados) {
+        const atualizada = await atualizarInscricao(id, dados)
+        setTodasInscricoes((a) => mesclar(a, atualizada))
+        return atualizada
       },
 
       async removerInscricao(id) {

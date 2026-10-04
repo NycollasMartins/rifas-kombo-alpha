@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import EstadoVazio from '../EstadoVazio'
 import ModalInscricao from '../ModalInscricao'
+import CartaoQrCodeInscricao from './CartaoQrCodeInscricao'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
+import { useSessao } from '../../hooks/useSessao'
 import { gerarLinkDoComprovante } from '../../lib/db/arquivos'
 import { totalPagoDoGrupo } from '../../utils/calculos'
 import { formatarDataHora, formatarMoeda } from '../../utils/formato'
@@ -16,7 +18,9 @@ const ROTULO_FORMA = { direto: 'Ingresso direto', rifa: 'Vendendo rifas' }
  */
 export default function AbaInscricoes() {
   const { config, vendedores, vendas, inscricoes, removerInscricao } = useDadosRifa()
+  const { grupo } = useSessao()
   const [novaInscricao, setNovaInscricao] = useState(false)
+  const [confirmando, setConfirmando] = useState(null)
   const [abrindo, setAbrindo] = useState('')
   const [erro, setErro] = useState('')
 
@@ -61,6 +65,8 @@ export default function AbaInscricoes() {
         </button>
       </div>
 
+      <CartaoQrCodeInscricao grupo={grupo} />
+
       <div className={estilos.destaques}>
         <div className={estilos.destaque}>
           <div className={estilos.numero}>{formatarMoeda(totalDireto)}</div>
@@ -98,6 +104,11 @@ export default function AbaInscricoes() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
+                {inscricao.status === 'pendente' && (
+                  <button className="btn btn-sm" onClick={() => setConfirmando(inscricao)}>
+                    Confirmar pagamento
+                  </button>
+                )}
                 {inscricao.comprovantePath && (
                   <button
                     className="btn-ghost btn-sm"
@@ -117,6 +128,10 @@ export default function AbaInscricoes() {
       )}
 
       {novaInscricao && <ModalInscricao aoFechar={() => setNovaInscricao(false)} />}
+
+      {confirmando && (
+        <ModalInscricao inscricaoExistente={confirmando} aoFechar={() => setConfirmando(null)} />
+      )}
     </>
   )
 }
