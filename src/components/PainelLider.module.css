@@ -1,8 +1,7 @@
 .abas {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
-  overflow-x: auto;
-  padding-bottom: 4px;
   margin-bottom: 20px;
   border-bottom: 1px solid var(--line);
 }
