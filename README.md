@@ -1,480 +1,534 @@
 # Rifas do Acampamento
 
-Controle das rifas de dois grupos independentes:
+Sistema de venda de rifas para dois grupos independentes de um acampamento de
+igreja:
 
 - **Alpha** — adolescentes · verde `#0d6636` e amarelo `#fbbf05`
 - **Kombo** — jovens · azul `#001b60` e amarelo `#f1b404`
 
-Cada grupo tem seu preço, sua meta, sua numeração de rifas e seu sorteio. Um
-líder do Alpha nunca enxerga nada do Kombo, e vice-versa.
+Cada grupo tem seu preço de rifa, sua meta, sua numeração e seu sorteio. Um
+líder do Alpha nunca enxerga nem altera nada do Kombo, e vice-versa — essa
+separação é imposta pelo banco (RLS), não pela tela.
 
-Feito com **Vite + React** na frente e **Supabase** (Postgres) atrás.
+**Stack:** Vite + React (sem framework de rotas, sem Redux) na frente,
+Supabase (Postgres + Auth + Storage + Edge Functions) atrás. Não existe
+servidor próprio: o "backend" inteiro é o schema do Postgres mais duas Edge
+Functions.
+
+**Produção:**
+- App: `https://dashboard.rifasacampamento.tech`
+- Repositório: `https://github.com/NycollasMartins/rifas-kombo-alpha` (privado)
+- Host: EasyPanel (Docker + Nginx), servidor próprio
+- Banco: Supabase, projeto `odgweocenaopqxjgpdqm`
 
 ---
 
-## Passo 1 — Criar o projeto no Supabase
+## Índice
 
-> ⚠️ **Crie um projeto novo, só para as rifas.** Não use um projeto que já
-> tenha outro sistema dentro — o `schema.sql` tem uma trava que detecta isso e
-> se recusa a rodar. O plano gratuito permite dois projetos por organização.
+1. [Arquitetura em 2 minutos](#arquitetura-em-2-minutos)
+2. [Publicar uma mudança (produção)](#publicar-uma-mudança-produção)
+3. [Rodar localmente / criar um projeto do zero](#rodar-localmente--criar-um-projeto-do-zero)
+4. [Banco de dados e segurança](#banco-de-dados-e-segurança)
+5. [Edge Functions](#edge-functions)
+6. [Mapa do código](#mapa-do-código)
+7. [Funcionalidades — onde mexer em cada uma](#funcionalidades--onde-mexer-em-cada-uma)
+8. [Convenções e pegadinhas](#convenções-e-pegadinhas)
+9. [Arquivos legados](#arquivos-legados)
 
-1. Em [supabase.com](https://supabase.com), **New project**.
-2. Guarde a **Database Password** num lugar seguro.
-3. **Region:** `South America (São Paulo)`.
+---
 
-## Passo 2 — Desligar a confirmação de e-mail
-
-**Este passo não é opcional.** Sem ele ninguém consegue criar senha.
-
-**Authentication → Sign In / Providers → Email.** Essa tela tem **dois**
-interruptores e é fácil trocar:
-
-| Interruptor | Onde | Deve ficar |
-|---|---|---|
-| **Enable Email provider** | no alto da seção | **ligado** |
-| **Confirm email** | dentro da seção | **desligado** |
-
-Desligar o de cima por engano derruba o login inteiro, e o app passa a responder
-*"Email logins are disabled"*.
-
-Por que desligar o "Confirm email": o app deixa cada pessoa criar a própria
-senha. Com a confirmação ligada, o Supabase manda um e-mail antes de liberar o
-acesso — e o envio gratuito é limitado a **3 e-mails por hora**. Num grupo de 40
-adolescentes isso trava no primeiro dia.
-
-Para conferir se ficou certo, abra este endereço no navegador (troque pela sua
-URL e sua chave):
+## Arquitetura em 2 minutos
 
 ```
-https://SEU-PROJETO.supabase.co/auth/v1/settings?apikey=SUA_CHAVE
+┌─────────────────────┐        ┌──────────────────────────────┐
+│  React (Vite SPA)    │──────▶│  Supabase                     │
+│  servido por Nginx    │       │  - Postgres (RLS faz a conta) │
+│  dentro de um          │       │  - Auth (e-mail + senha)      │
+│  container Docker      │       │  - Storage (termos/comprov.)  │
+│  no EasyPanel          │       │  - 2 Edge Functions (Deno)    │
+└─────────────────────┘        └──────────────────────────────┘
 ```
 
-Tem de aparecer `"email": true` e `"mailer_autoconfirm": true`.
+- **Sem rota de servidor própria.** Tudo que parece "lógica de backend" é
+  função SQL `SECURITY DEFINER` no Postgres, chamada via `supabase.rpc(...)`.
+  O front-end nunca decide quem pode o quê — ele só mostra ou esconde botão;
+  quem barra de verdade é o banco. Isso importa: se um líder do Alpha chamar
+  a API na mão, ele continua sem alcançar o Kombo.
+- **Três papéis** (tabela `perfis.papel`): `dev` (enxerga os dois grupos,
+  corrige dados), `lider` (só o próprio grupo), `vendedor` (só as próprias
+  vendas). Todo mundo faz login — inclusive o vendedor.
+- **Duas Edge Functions** cobrem as duas coisas que exigem uma chave que o
+  navegador nunca pode ver: mandar push de verdade (VAPID private key) e
+  trocar a senha de outra pessoa (`service_role`). Ver [Edge
+  Functions](#edge-functions).
+- **Tema por grupo** é um atributo (`data-grupo="Alpha"` ou `"Kombo"`) no
+  `<html>`, e `styles/tokens.css` troca as variáveis de cor em cima disso. Pra
+  mudar a cor de um grupo, mexe só ali.
 
-## Passo 3 — Criar as tabelas
+---
 
-**SQL Editor → New query**, cole o [`supabase/schema.sql`](supabase/schema.sql)
-inteiro e **Run**.
+## Publicar uma mudança (produção)
 
-O resultado esperado é `Success. No rows returned` — o script cria coisas, não
-consulta nada. Para conferir:
+### Frontend — é só dar `git push`
+
+```bash
+git push origin main
+```
+
+O EasyPanel está apontado para este repositório no GitHub e builda com o
+[`Dockerfile`](Dockerfile) da raiz (Node compila com Vite → Nginx serve o
+resultado estático). As variáveis `VITE_SUPABASE_URL`,
+`VITE_SUPABASE_ANON_KEY` e `VITE_VAPID_PUBLIC_KEY` já estão cadastradas no
+serviço do EasyPanel como **Build Args** — o Vite só lê essas variáveis na
+hora do build (ficam embutidas no JS gerado), por isso elas têm de estar
+configuradas ali como *build-time*, não só como variável de runtime do
+container.
+
+Se o painel do EasyPanel estiver com o **auto-deploy ligado** (aba do serviço
+→ *Source* → *Auto Deploy*), um push na `main` já builda e publica sozinho —
+não precisa fazer mais nada. Se não tiver, a única ação manual é clicar em
+**Deploy** no serviço, depois do push.
+
+> Confira essa opção uma vez e deixa ligada: é o que faz "só subir pro
+> GitHub" ser literalmente o único passo.
+
+### Banco de dados (Supabase) — **sempre manual, nunca automático**
+
+Push no GitHub **não muda o banco**. Toda alteração em
+[`supabase/schema.sql`](supabase/schema.sql) precisa ser colada manualmente
+no **SQL Editor** do painel do Supabase e rodada com *Run*. O arquivo é
+**idempotente** — todo `create table` é `if not exists`, todo `alter table
+add column` é `if not exists`, toda função é `create or replace` — então dá
+pra colar o arquivo inteiro de novo sempre que ele mudar, mesmo com o
+acampamento inteiro já cadastrado. Nada é apagado numa re-execução.
+
+### Edge Functions — manual, via CLI
+
+As duas funções em [`supabase/functions/`](supabase/functions/) também não
+sobem sozinhas com o `git push`. Precisa da Supabase CLI instalada e do
+projeto linkado (`supabase link --project-ref odgweocenaopqxjgpdqm`), depois:
+
+```bash
+supabase functions deploy notificar-vendedores
+supabase functions deploy redefinir-senha-vendedor
+```
+
+Ver [Edge Functions](#edge-functions) para o que cada uma faz e quais secrets
+precisa.
+
+---
+
+## Rodar localmente / criar um projeto do zero
+
+Use isto para testar numa máquina nova, ou para montar um segundo ambiente
+(ex: um projeto Supabase de teste, separado do de produção).
+
+### 1. Criar o projeto no Supabase
+
+> ⚠️ **Projeto novo, só para este sistema.** O `schema.sql` tem uma trava que
+> detecta tabelas de outro sistema e se recusa a rodar.
+
+Em [supabase.com](https://supabase.com) → **New project** → region `South
+America (São Paulo)`. Guarde a Database Password.
+
+### 2. Desligar a confirmação de e-mail
+
+**Não é opcional** — sem isso ninguém consegue criar senha.
+
+**Authentication → Sign In / Providers → Email:**
+
+| Interruptor | Deve ficar |
+|---|---|
+| **Enable Email provider** | ligado |
+| **Confirm email** | **desligado** |
+
+Com a confirmação ligada, o Supabase manda e-mail antes de liberar acesso —
+e o envio gratuito é limitado a 3/hora. Num grupo de 40 pessoas isso trava no
+primeiro dia.
+
+### 3. Criar as tabelas
+
+**SQL Editor → New query**, cole [`supabase/schema.sql`](supabase/schema.sql)
+inteiro, **Run**. Esperado: `Success. No rows returned`.
 
 ```sql
 select table_name from information_schema.tables
 where table_schema = 'public' order by table_name;
 ```
 
-Devem aparecer sete: `codigos_acesso`, `config`, `perfis`, `sorteios`,
-`vendas`, `vendedores`, `vendedores_privado`.
+Devem aparecer oito: `codigos_acesso`, `config`, `inscricoes`,
+`inscricoes_push`, `perfis`, `sorteios`, `vendas`, `vendedores`,
+`vendedores_privado`.
 
-Pode rodar de novo sempre que houver atualização: quando a estrutura nova já
-está no lugar, **nada é apagado**.
-
-## Passo 4 — Criar o seu acesso de dev e os códigos dos grupos
-
-O **dev** é o único que enxerga os dois grupos e corrige dados já registrados.
-
-1. **Authentication → Users → Add user → Create new user** com o seu e-mail e
-   senha. Marque **Auto Confirm User**.
-2. No **SQL Editor**, troque o e-mail e rode:
+### 4. Criar o seu acesso de dev e os códigos dos grupos
 
 ```sql
+-- depois de criar o usuário em Authentication -> Users -> Add user
+-- (marque "Auto Confirm User")
 insert into public.perfis (id, nome, papel, grupo)
 select id, 'Dev', 'dev', null from auth.users where email = 'voce@email.com'
 on conflict (id) do update set papel = 'dev', grupo = null;
-```
 
-3. Ainda no SQL Editor, defina o código de liderança de cada grupo — é a
-   palavra que um novo líder digita para criar o acesso dele:
-
-```sql
 select public.definir_codigo_de_lider('Alpha', 'troque-esta-palavra');
 select public.definir_codigo_de_lider('Kombo', 'troque-esta-tambem');
 ```
 
-Depois disso os códigos podem ser trocados dentro do app, em Configurações.
+Os códigos (liderança e autocadastro de vendedor) podem ser trocados depois
+dentro do app, em Configurações — não precisam mais passar por SQL.
 
-## Passo 5 — Colar as credenciais
+### 5. Credenciais locais
 
-**Project Settings → API.** Copie o **Project URL** e a chave pública (aparece
-como `anon public` ou como **Publishable key**, dependendo da idade do
-projeto — as duas servem).
+**Project Settings → API** → copie o Project URL e a chave `anon public`
+(a.k.a. "Publishable key").
 
 ```bash
 cp .env.example .env.local
 ```
 
-Preencha as duas linhas do `.env.local`:
-
 ```
 VITE_SUPABASE_URL=https://seu-projeto.supabase.co
 VITE_SUPABASE_ANON_KEY=sua-chave
+VITE_VAPID_PUBLIC_KEY=   # opcional, só pra notificação push — veja Edge Functions
 ```
 
-> A chave pública vai embutida no site — isso é normal e esperado. Quem protege
-> os dados são as regras do banco. A `service_role` / `secret key` **não** é
-> usada aqui e nunca deve ser colada neste arquivo.
+> A chave `anon` vai embutida no site — é pública por natureza e esperado.
+> Quem protege os dados são as regras do banco (RLS), não o sigilo dessa
+> chave. A `service_role` **nunca** entra neste arquivo nem no front-end —
+> ela só existe dentro da Edge Function `redefinir-senha-vendedor`, injetada
+> automaticamente pelo Supabase.
 
-## Passo 6 — Rodar
+### 6. Rodar
 
 ```bash
 npm install
 npm run dev
 ```
 
-O terminal mostra também um endereço de rede (`http://192.168.x.x:5173`). Com o
-celular no mesmo Wi-Fi, dá para testar de verdade antes de publicar.
-
-## Passo 7 — Publicar
-
-```bash
-npm run build
-```
-
-Arraste a pasta `dist` para [app.netlify.com/drop](https://app.netlify.com/drop).
-Em segundos você tem um endereço público. Crie a conta no Netlify para poder
-atualizar o mesmo site depois.
-
-Se preferir deploy automático a cada `git push`, use a Vercel: importe o
-repositório e cadastre `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` em
-**Environment Variables** antes do primeiro deploy.
+O terminal também mostra um endereço de rede (`http://192.168.x.x:5173`) —
+com o celular no mesmo Wi-Fi dá pra testar de verdade, inclusive o convite de
+instalação.
 
 ---
 
-## Como cada pessoa entra
+## Banco de dados e segurança
 
-### Líder — cria a própria conta
+Tudo em [`supabase/schema.sql`](supabase/schema.sql), um arquivo só,
+organizado em seções numeradas (o cabeçalho de cada uma explica o que vem a
+seguir). Resumo das tabelas:
 
-Na tela inicial: **Sou líder → Criar acesso de líder**. Ele informa nome,
-e-mail, senha, escolhe **Alpha ou Kombo** e digita o **código do acampamento**
-do grupo dele.
-
-Ninguém precisa de você para isso. O que impede um curioso de virar líder é o
-código, que a liderança combina entre si — **não mande no grupo dos
-vendedores**: quem tem o código enxerga tudo daquele grupo, inclusive os termos
-assinados.
-
-Para trocar o código: **Configurações → Código de liderança**. Trocar não
-derruba quem já entrou.
-
-### Vendedor — o líder cadastra, ele cria a senha
-
-1. O líder cadastra o vendedor em **Vendedores → Adicionar**, com **nome,
-   e-mail, telefone e meta**. O e-mail é o que vai permitir a entrada, então
-   confira — e o telefone é para onde vai o termo de responsabilidade (veja
-   abaixo).
-2. O vendedor abre o app: **Sou vendedor(a) → É meu primeiro acesso**, digita o
-   **mesmo e-mail** e escolhe uma senha.
-3. Nas próximas vezes, é só **Entrar**.
-
-Se o e-mail não estiver cadastrado, o app diz isso com todas as letras e manda
-falar com o líder. Não existe mais lista de nomes para escolher.
-
-Na aba Vendedores, quem ainda não criou a senha aparece marcado como
-**"não entrou ainda"**.
-
-### Esqueci a senha
-
-Tem link de recuperação por e-mail nas duas telas de entrada. Lembre que o
-envio gratuito do Supabase é limitado (3 por hora). Se isso virar problema,
-configure um SMTP próprio em **Authentication → SMTP Settings** — o plano
-gratuito do [Resend](https://resend.com) resolve. Em último caso, o dev gera um
-link de recuperação em **Authentication → Users**, nos três pontinhos.
-
-### Lembrar de mim
-
-As duas telas de entrada (líder e vendedor) têm um checkbox **"Lembrar de mim
-neste aparelho"**, marcado por padrão. Com ele marcado, a sessão continua
-depois de fechar o navegador — é o que sempre aconteceu. Desmarcando, a
-sessão vale só para aquela aba: fechou, precisa entrar de novo. Útil em
-celular emprestado ou computador compartilhado.
-
----
-
-## Instalar na tela de início
-
-Quem abre o link vê, num cantinho embaixo, um convite para deixar o app na tela
-de início do celular. Instalado, ele abre em tela cheia, sem barra de endereço
-e sem precisar procurar o link.
-
-O convite **aparece toda vez** que alguém abre o app sem tê-lo instalado.
-Fechar vale só para aquela visita: nada fica guardado no navegador. Some de vez
-só depois de instalado.
-
-O que ele mostra muda conforme o aparelho:
-
-| Situação | O que aparece |
+| Tabela | Guarda |
 |---|---|
-| Android, navegador colaborando | botão **Instalar** — um toque e pronto |
-| Android, sem o botão disponível | *"No menu do navegador (⋮), toque em Instalar app"* |
-| iPhone | botão **Instalar** que abre o passo a passo |
+| `config` | preço da rifa, meta padrão, prazo, prêmio — uma linha por grupo. Inclui `preco_rifa_chale`/`meta_chale`, usados só pelo Kombo (ver [chalé x quarto](#preço-por-destino-chalé-x-quarto--só-kombo)) |
+| `codigos_acesso` | hash dos códigos de liderança e de autocadastro — nunca legível, só comparável por função |
+| `vendedores` | cadastro, `situacao` (`ativo` / `quitou` / `desistiu` / `inscrito`), `tipo` (`adolescente` / `voluntario`), `destino` (`quarto` / `chale`, só Kombo) |
+| `perfis` | o papel de cada conta logada (`dev` / `lider` / `vendedor`) e o `vendedor_id` quando for vendedor |
+| `vendedores_privado` | observações e termo assinado — líder vê, vendedor não vê nem o próprio |
+| `vendas` | cada rifa vendida, com `status` (pago/pendente) e `repasse` (pendente/entregue/confirmado) |
+| `inscricoes` | quem já garantiu vaga no acampamento, direto ou vendendo rifas — ver [Inscrições](#inscrições-fase-de-teste---só-dev) |
+| `inscricoes_push` | assinatura de notificação push por vendedor |
+| `sorteios` | histórico de sorteios |
 
-No iPhone o guia mostra os quatro toques, com duas versões — o iOS 27 trocou
-o botão que abre o menu, o resto do caminho é igual. O guia detecta a versão
-instalada e já abre na certa, mas deixa trocar (útil quando quem está lendo
-ajuda outra pessoa com um aparelho diferente):
-
-**iOS 27** (Safari novo):
-1. Toque no ícone **☰** (três tracinhos), ao lado da seta
-2. Toque em **Compartilhar**
-3. Na terceira fileira, toque em **Ver mais**
-4. Toque em **Adicionar à Tela de Início**
-
-**iOS 26 ou antes:**
-1. Toque no botão **⋯** (os três pontos)
-2. Toque em **Compartilhar**
-3. Na terceira fileira, toque em **Ver mais**
-4. Toque em **Adicionar à Tela de Início**
-
-Não há caminho diferente por navegador de propósito: esse menu é o mesmo no
-Safari atual e no Chrome, e inventar uma variação sem ter testado daria
-instrução errada para alguém. O guia só acrescenta uma nota de que no iOS 26
-ou antes, em iPhones mais antigos, o Compartilhar fica direto na barra de
-baixo.
-
-Ao abrir o guia, o cartão do canto some — os dois juntos disputariam a atenção.
-E o guia **só fecha no ×**: nem toque fora, nem Esc. A pessoa vai sair do app
-para seguir os passos e voltar para conferir o próximo, e um toque fora
-apagaria a instrução bem na hora em que ela mais precisa dela.
-
-Duas coisas que valem saber:
-
-**A Apple não permite** que um site dispare a instalação no iPhone. O botão
-"Instalar" ali abre a explicação — é o máximo que um site consegue fazer.
-
-**O botão do Android depende do navegador.** O Chrome decide quando oferecer
-esse evento e tem critérios próprios: às vezes ele segura numa visita seguinte.
-Por isso o convite nunca depende dele para aparecer — sem o evento, cai na
-instrução pelo menu. Assim ninguém fica sem saber que dá para instalar.
-
-Nada disso é banco de dados: são arquivos estáticos em `public/`
-(`manifest.webmanifest`, os ícones e um `sw.js` mínimo). O `sw.js` existe só
-porque o Android exige um service worker para oferecer a instalação — ele
-repassa tudo para a rede e **não guarda cache**, de propósito: com cache, uma
-republicação deixaria as pessoas presas na versão velha.
-
-Só funciona em **HTTPS** — no Netlify já vem assim. Em `localhost` também
-funciona para testar.
-
-## Os três acessos
+**Os três papéis**, resumidos:
 
 | | Vendedor | Líder | Dev |
 |---|:---:|:---:|:---:|
 | Enxerga | só o grupo dele | só o grupo dele | os dois grupos |
-| Registrar venda | ✅ (só as próprias) | ✅ | ✅ |
-| Marcar pago/pendente e repasse | ❌ | ✅ | ✅ |
-| Cadastrar vendedores, sortear, configurar | ❌ | ✅ | ✅ |
-| Ver termos assinados e observações | ❌ | ✅ | ✅ |
-| Corrigir venda já registrada | ❌ | ❌ | ✅ |
-| Transferir rifas entre vendedores | ❌ | ❌ | ✅ |
+| Registra venda | ✅ (só as próprias) | ✅ | ✅ |
+| Marca pago/pendente, repasse | ❌ | ✅ | ✅ |
+| Cadastra vendedores, sorteia, configura | ❌ | ✅ | ✅ |
+| Vê termos assinados e observações | ❌ | ✅ | ✅ |
+| Corrige venda já registrada | ❌ | ❌ | ✅ |
+| Transfere rifas entre vendedores | ❌ | ❌ | ✅ |
+| Vê/edita Inscrições (fase de teste) | ❌ | ❌ | ✅ |
 
-Cada linha dessa tabela é uma regra dentro do Postgres, não uma tela escondida.
-Um líder do Alpha que chame a API por fora do app continua sem alcançar o
-Kombo, e um vendedor continua sem conseguir apagar nada.
+Cada linha é uma policy de RLS ou uma checagem dentro de uma função
+`SECURITY DEFINER` — não uma tela escondida.
 
-Quem não fez login não lê absolutamente nada.
+**Modelo de segurança (RLS):** toda tabela tem Row Level Security ligado.
+Funções helper (`meu_papel()`, `meu_grupo()`, `e_dev()`, `e_lider()`,
+`posso_ver(grupo)`) decidem visibilidade; políticas usam essas funções. Fluxos
+que precisam de lógica (cadastro, fechamento de meta, etc.) são funções
+`SECURITY DEFINER` chamadas via `.rpc(...)`, nunca `insert`/`update` direto
+numa tabela sensível pelo cliente.
 
----
-
-## O dia a dia
-
-### Registrar uma venda (vendedor)
-
-O comprador pode levar **várias rifas de uma vez** — o app mostra o total e, ao
-salvar, exibe os números que saíram para você anotar no talão.
-
-- **Pix** → anexe a foto do comprovante. Se não der naquele momento, marque
-  "não consigo anexar agora" e a venda fica sinalizada para a liderança.
-- **Dinheiro** → o vendedor declara que recebeu e assume o repasse.
-
-### Avisar o comprador pelo WhatsApp
-
-Terminada a venda, aparece **"Enviar no WhatsApp"**. Abre a conversa com o
-comprador já com a mensagem escrita: o primeiro nome dele, os números das
-rifas, o valor, o **prêmio que ele está concorrendo** (se cadastrado em
-Configurações → Prêmio do sorteio) e o nome de quem vendeu.
-
-> **O app não envia sozinho.** Ele deixa a mensagem pronta e o vendedor aperta
-> enviar. Envio automático exigiria a API oficial da Meta — conta business
-> aprovada, modelos de mensagem homologados e cobrança por mensagem.
-
-Sem telefone cadastrado, ou com um número que o sistema não reconhece, o botão
-vira **"Copiar mensagem"** — cola em qualquer conversa. Esse botão aparece
-sempre, mesmo com telefone.
-
-O número é entendido em qualquer formato: `(11) 98888-0000`, `11988880000`,
-`+55 11 98888-0000`. Só o DDD é obrigatório.
-
-Dá para reenviar depois: na lista de compras do vendedor, e também no painel da
-liderança em **Vendedores → Ver vendas**.
-
-### Os avisos do prazo
-
-Quando há prazo cadastrado, o vendedor é avisado na tela dele em quatro
-momentos, com urgência crescente:
-
-| Quando | O que aparece |
-|---|---|
-| 7 dias antes | *"Falta 1 semana para o prazo"* — pode ser fechado |
-| 3 dias antes | *"Faltam 3 dias para o prazo"* — pode ser fechado |
-| 24 horas antes | *"Falta 1 dia para o prazo acabar"* — pode ser fechado |
-| no dia | *"Hoje é o último dia de vendas"* — não fecha |
-| depois | *"O prazo de vendas encerrou"* — não fecha |
-
-Todos dizem quantas rifas e quanto em dinheiro ainda faltam para a meta dele.
-
-Quem fechou um aviso volta a ser avisado no marco seguinte — dispensar o de 7
-dias não silencia o de 3. Os dois últimos não têm botão de fechar: é a hora de
-agir. E quem já bateu a meta não recebe aviso nenhum.
-
-Quem abre o app entre dois marcos vê o mais recente: no quinto dia aparece o
-aviso de 7, não o silêncio.
-
-### Conferir o dinheiro (líder)
-
-**Vendedores → Ver vendas** mostra as compras daquele vendedor agrupadas: cada
-compra com os números das rifas, o valor, e o botão para abrir o comprovante do
-Pix. As em dinheiro ficam marcadas como declaradas por ele.
-
-No painel há o contador **"Pix sem comprovante"**, e a aba Vendas tem o filtro
-correspondente — é a sua lista de cobrança.
-
-### O termo de compromisso
-
-Todo vendedor assina um termo se comprometendo a comprar as rifas que não
-vender.
-
-Assim que o líder cadastra o vendedor, o app já abre a tela para **enviar o
-termo pelo WhatsApp**: o texto vem pronto (preço da rifa, meta e prazo), no
-telefone que acabou de ser cadastrado — o líder só confere e aperta enviar,
-igual ao aviso do comprador. Sem telefone reconhecido, sobra "Copiar
-mensagem".
-
-Depois que o vendedor devolver assinado (papel ou PDF), anexe em
-**Vendedores → Editar → Anexar arquivo** (PDF ou foto, até 10 MB). Quem ainda
-não entregou aparece marcado como **"sem termo"**.
-
-Os arquivos ficam num espaço privado separado por grupo. Não existe link fixo:
-cada abertura gera um endereço que expira em 10 minutos. O vendedor nunca
-enxerga nenhum termo, nem o próprio — são documentos pessoais, muitos de
-adolescentes. A observação do vendedor segue a mesma regra.
-
-### O prêmio do sorteio
-
-Em **Configurações → Prêmio do sorteio** você descreve o que está sendo
-sorteado (ex: "uma TV 50 polegadas"). Vale só para o grupo daquela
-configuração. Uma vez preenchido, entra sozinho na mensagem que o comprador
-recebe pelo WhatsApp — não precisa digitar de novo em cada venda.
-
-### O prazo e o fechamento
-
-Em **Configurações → Prazo final** você define a data limite. Passado o prazo,
-o vendedor vê na tela dele quantas rifas precisa comprar, e o líder vê a lista
-de quem está devendo.
-
-**Vendedores → Fechar meta** registra de uma vez as rifas que faltam, no nome
-da pessoa. São rifas de verdade: ganham número, entram no sorteio e no CSV,
-marcadas como compra própria.
-
-### Quando alguém desiste
-
-Ninguém é excluído depois de ter vendido. Edite o vendedor e marque a situação
-como **Desistiu**, com uma observação. Ele sai das contas de meta e do ranking,
-e o que já arrecadou aparece no painel como **"Arrecadado por quem desistiu —
-fica para o acampamento"**.
+**Numeração das rifas:** cada grupo tem sequência independente começando em
+`#001`. O número de uma venda nova é sempre o **menor número livre** daquele
+grupo (não um sequence monotônico) — se uma venda de teste for apagada, o
+número dela volta a ficar disponível. Ver `definir_grupo_e_numero()` no
+schema.
 
 ---
 
-## Detalhes que valem saber
+## Edge Functions
 
-**Cada grupo tem sua numeração.** Alpha começa no `#001` e Kombo também, em
-sequências independentes. Se o líder excluir uma rifa, aquele número não é
-reaproveitado — igual a um talão de papel.
+Em [`supabase/functions/`](supabase/functions/). Rodam no Deno, do lado do
+Supabase — é o único lugar onde chaves privadas podem existir.
 
-**Rifas não atravessam grupos.** Nem na transferência do dev, justamente porque
-a numeração é separada.
+### `notificar-vendedores`
 
-**Começar um acampamento novo.** *Configurações → Zona de risco* apaga só o
-**seu** grupo e devolve a numeração ao `#001`. Exporte o CSV antes.
-
-**Projeto pausado.** No plano gratuito o Supabase pausa projetos com cerca de
-uma semana sem acesso. É só clicar em *Restore* no painel — os dados continuam
-lá.
-
----
-
-## Organização do código
+Dispara notificação push de verdade (barra do celular) pros vendedores de um
+grupo. Chamada pelo front-end em `src/lib/db/notificacoes.js`. Secrets
+necessários (`supabase secrets set ...`):
 
 ```
-supabase/schema.sql        Todo o banco: tabelas, papéis, permissões,
-                           arquivos e Realtime
+VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+VAPID_SUBJECT=mailto:voce@email.com
+```
 
-public/                    Arquivos servidos como estão
-  manifest.webmanifest     Nome, cores e ícones do app instalado
-  sw.js                    Service worker mínimo (sem cache)
-  icone-192.png            Ícones da tela de início
-  icone-512.png
-  apple-touch-icon.png
+Gere o par com `npx web-push generate-vapid-keys`. A pública também vai no
+`.env.local` / build args do front (`VITE_VAPID_PUBLIC_KEY`); a privada
+**só** vai como secret da função, nunca no front.
+
+### `redefinir-senha-vendedor`
+
+Deixa o líder trocar a senha de um vendedor **direto no app**, sem precisar
+de link por e-mail (o reset por e-mail do Supabase é limitado e, pra um
+vendedor menor de idade sem o próprio e-mail, nem sempre funciona). Usa a
+`SUPABASE_SERVICE_ROLE_KEY` — que o Supabase injeta automaticamente em toda
+Edge Function, sem precisar configurar nada. Chamada pelo botão "Redefinir
+senha" em `ModalVendedor.jsx` (dentro de Editar vendedor, se ele já criou
+conta).
+
+Ambas usam `SUPABASE_URL` e `SUPABASE_ANON_KEY`, também injetadas
+automaticamente.
+
+---
+
+## Mapa do código
+
+```
+supabase/
+  schema.sql                 Todo o banco: tabelas, RLS, funções, Storage,
+                              Realtime — numerado em seções, leia o topo
+  functions/
+    notificar-vendedores/    Push de verdade via VAPID
+    redefinir-senha-vendedor/ Líder troca a senha do vendedor sem e-mail
+
+public/                      Servidos como estão
+  manifest.webmanifest       Nome, cores, ícones do app instalado
+  sw.js                      Service worker mínimo — só GET, sem cache
+                              (ver "Convenções" antes de mexer aqui)
+  icone-*.png, apple-touch-icon.png
 
 src/
-  main.jsx                 Ponto de entrada
-  App.jsx                  Só decide qual tela mostrar
+  main.jsx                   Ponto de entrada. Decide ANTES de tudo se a URL
+                              é o formulário público (/inscricao/alpha ou
+                              /inscricao/kombo) ou o app normal
+  App.jsx                    Dentro do app normal: só decide qual tela mostrar
+                              conforme sessão/papel
 
   lib/
-    supabase.js            Conexão
-    db/
-      entrada.js           Papel de quem entrou, cadastro de líder, códigos
-      config.js            Preço, meta e prazo — por grupo
-      vendedores.js        Cadastro, e-mail e situação
-      vendedoresPrivado.js Observações e termos — nunca legível sem login
-      arquivos.js          Termos e comprovantes nos buckets privados
-      vendas.js            Registro em lote, correção, agrupamento
-      sorteios.js          Histórico
-      fechamento.js        Fechar meta, transferir rifas, apagar grupo
-      erros.js             Traduz os erros técnicos para português
+    supabase.js              Dois clientes: `supabase` (guarda sessão,
+                              usado pelo app inteiro) e `supabaseAnonimo`
+                              (sem sessão nenhuma, só pro formulário público —
+                              ver "Convenções")
+    db/                      Uma chamada RPC ou query por arquivo, nomeado
+                              pelo domínio:
+      entrada.js              Login, autocadastro, cadastro de líder, códigos
+      config.js                Preço, meta e prazo — por grupo
+      vendedores.js             Cadastro, e-mail, tipo, destino, situação
+      vendedoresPrivado.js       Observações e termos — nunca sem login
+      arquivos.js                 Upload/link de termos e comprovantes
+      vendas.js                    Registro em lote, correção, agrupamento
+      inscricoes.js                 Inscrições diretas, por rifa, públicas
+      sorteios.js                   Histórico
+      fechamento.js                 Fechar meta, transferir rifas, apagar grupo
+      perfis.js                     Lista/gestão de líderes
+      notificacoes.js                Push: salvar inscrição, disparar aviso
+      erros.js                       Traduz erro técnico -> frase em português
 
   hooks/
-    useSessao.jsx          Login, cadastro, papel e grupo
-    useDadosRifa.jsx       Carrega os dados do grupo e escuta o Realtime
+    useSessao.jsx             Quem está logado: papel, grupo, todas as ações
+                               de entrar/cadastrar/trocar senha
+    useDadosRifa.jsx           Carrega tudo do grupo ativo, escuta Realtime,
+                               expõe as ações (adicionarVendedor, fecharMeta,
+                               inscreverVendedorPorRifa, etc.)
 
   utils/
-    grupos.js              Alpha e Kombo: nomes, siglas e troca de tema
-    formato.js             Moeda, número da rifa, datas
-    calculos.js            Totais, metas, ranking, quem está devendo
-    prazo.js               Contagem de dias, marcos de aviso e o que falta
-    instalacao.js          Detecta o aparelho e controla o convite de instalar
-    whatsapp.js            Monta a mensagem e o link da conversa
-    csv.js                 Exportação para planilha
+    grupos.js                  Alpha/Kombo: nomes, siglas, rótulos
+                                (Adolescente/Jovem), tema
+    calculos.js                  Totais, metas, ranking — tudo que resolve
+                                  preço por vendedor (chalé x quarto) passa
+                                  por aqui, ver precoDoVendedor()
+    formato.js, prazo.js, csv.js, whatsapp.js, instalacao.js
 
   components/
-    TelaEntrada            Vendedor ou líder
-    TelaLider              Login e criação de conta com o código do grupo
-    TelaVendedorEntrada    Login e primeiro acesso por e-mail
-    TelaNovaSenha          Chegada pelo link de recuperação
-    TelaSemAcesso          Entrou mas a conta não está ligada a nada
-    TelaVendedor           Progresso, prazo e as próprias rifas
-    PainelLider            Cabeçalho e abas
-    lider/Aba*             Painel, Vendas, Vendedores, Sorteio,
-                           Configurações e Manutenção (só dev)
-    ModalNovaVenda         Venda em lote com comprovante
-    ModalVendasDoVendedor  Compras agrupadas, com os comprovantes
-    CompraDoVendedor       Uma compra na lista do vendedor, com o WhatsApp
-    AvisoDePrazo           Os avisos de 7 dias, 3 dias, 24 horas e o dia
-    BotoesDoWhatsapp       Enviar / copiar a mensagem do comprador
-    ConviteParaInstalar    O cartão do canto oferecendo instalar o app
-    GuiaDeInstalacaoIphone O passo a passo do iPhone
-    ModalVendedor          Cadastro, situação, observação e termo
-    ModalEditarVenda       Correção completa (dev)
-    SeletorDeGrupo         Escolha entre Alpha e Kombo, já colorida
-    PainelTermo            Anexar, abrir e remover o termo
+    Tela*                       Telas de nível superior (entrada, login,
+                                 sem-acesso, vendedor)
+    PainelLider.jsx              Casca do painel: cabeçalho + abas. Abas
+                                 "Manutenção" e "Inscrições" só aparecem
+                                 condicionadas a papel (ver código)
+    lider/Aba*.jsx                Uma aba = um arquivo (Painel, Vendas,
+                                 Vendedores, Sorteio, Usuários,
+                                 Configurações, Manutenção, Inscrições)
+    Modal*.jsx                    Cada fluxo que abre em modal tem o seu
+    FormularioInscricaoPublico.jsx Formulário sem login, aberto via QR code
+    lider/CartaoQrCode*.jsx         Geram e mostram os QR codes
 
   styles/
-    tokens.css             As três peles: neutra, Alpha e Kombo
-    global.css             Botões, campos, cartões e etiquetas
+    tokens.css                  As três peles (neutra, Alpha, Kombo) — só
+                                 aqui pra mudar cor de grupo
+    global.css                   Botões, campos, cartões, etiquetas — o
+                                 "kit de peças" que todo componente usa
 ```
 
-Para mudar as cores de um grupo, mexa só no `tokens.css` — o app inteiro segue.
+Cada tela/componente visual tem um `NomeDoComponente.module.css` ao lado —
+não listado item a item acima pra não poluir.
 
-O arquivo `rifas-acampamento.html` na raiz é a versão original, feita no
-Claude.ai. Não funciona mais fora de lá (usava `window.storage`), mas ficou
-como referência do visual e das regras de negócio.
+---
+
+## Funcionalidades — onde mexer em cada uma
+
+### Autocadastro de vendedor
+
+O vendedor pode criar a própria conta sem o líder cadastrar antes: `"Ainda
+não tenho cadastro"` em `TelaVendedorEntrada.jsx` → RPC
+`registrar_vendedor_autonomo` (schema.sql) → `cadastrarVendedor` em
+`useSessao.jsx`. Usa um código **separado** do código de líder
+(`codigo_vendedor_hash`), pra compartilhar esse código nunca dar acesso de
+liderança por engano.
+
+`cadastrarVendedor` tem um "plano B": se a conta de e-mail/senha já existe
+(sobra de uma tentativa anterior que falhou no meio, ex: código errado), ele
+entra com a senha em vez de travar em "e-mail já cadastrado" — mesmo padrão
+usado em `criarContaDeLider`.
+
+### Preço por destino (chalé x quarto) — só Kombo
+
+No Kombo, um vendedor pode estar vendendo pra ficar no quarto normal (preço
+padrão de `config`) ou pra ficar num chalé (preço separado,
+`preco_rifa_chale`/`meta_chale`, configurável só quando o grupo ativo é
+Kombo — ver `AbaConfiguracoes.jsx`). O campo `vendedores.destino` guarda qual
+é. **Todo lugar que calcula dinheiro resolve isso via
+`precoDoVendedor(vendedor, config)` e `metaDoVendedor(vendedor, config)` em
+`utils/calculos.js`** — nunca lê `config.precoRifa` direto quando há um
+vendedor específico envolvido. Se for adicionar uma tela nova que mostra
+valor de rifa, passe por essas funções.
+
+### Rótulo Adolescente / Jovem
+
+O Alpha chama quem vende de "Adolescente"; o Kombo chama de "Jovem" — mesmo
+campo (`tipo = 'adolescente' | 'voluntario'` no banco), rótulo diferente.
+Resolvido em `utils/grupos.js` (`rotuloDoTipo` / `rotuloDoTipoPlural`), nunca
+hardcoded num componente.
+
+### Redefinir senha sem e-mail
+
+Botão "Redefinir senha" em `ModalVendedor.jsx` (editando um vendedor que já
+tem conta) → `redefinirSenhaDoVendedor` em `useSessao.jsx` → Edge Function
+`redefinir-senha-vendedor`. O reset por e-mail do Supabase (`"Esqueci a
+senha"`, em `TelaVendedorEntrada.jsx`) continua existindo em paralelo, mas
+pra vendedor costuma ser mais prático o líder resolver na hora.
+
+### Inscrições (fase de teste — só dev)
+
+Tabela `inscricoes`: quem já garantiu vaga no acampamento, seja pagando o
+ingresso direto, seja vendendo todas as rifas. Dois jeitos de uma linha
+nascer ali:
+
+1. **Direto**, pelo dev dentro do painel (`+ Nova inscrição` em
+   `AbaInscricoes.jsx`), ou pelo **formulário público** (ver abaixo).
+2. **Vendendo rifas** — botão "Inscrever" em `AbaVendedores.jsx` (só
+   aparece pro dev, vendedor com `situacao = 'ativo'`). Abre
+   `ModalInscricao.jsx`, que chama `inscreverVendedorPorRifa` em
+   `useDadosRifa.jsx`: se a meta ainda não foi batida, fecha ela primeiro
+   (mesmo mecanismo do botão "Fechar meta"); depois cria a inscrição e muda
+   `situacao` pra `'inscrito'`. A partir daí ele **some da aba Vendedores** e
+   aparece em Inscrições.
+
+**A aba só aparece pra `eDev`** — de propósito, pra testar antes de abrir pra
+liderança. Pra liberar, em `PainelLider.jsx` troca a condição que inclui
+`ABA_INSCRICOES`, e no `schema.sql` troca a política `"inscricoes: só o dev,
+por enquanto"` de `public.e_dev()` para `public.e_lider() and
+public.posso_ver(grupo)` (tem um comentário no schema exatamente nesse
+ponto).
+
+#### Formulário público por QR code
+
+`FormularioInscricaoPublico.jsx`, servido em `/inscricao/alpha` ou
+`/inscricao/kombo` — **sem login**. `main.jsx` detecta esse caminho antes de
+montar o app normal e renderiza só esse formulário. O QR de cada grupo é
+gerado em `lider/CartaoQrCodeInscricao.jsx` (dentro da aba Inscrições).
+
+A pessoa preenche só nome e telefone; isso cria uma `inscricao` com
+`status = 'pendente'`, `valor = 0`, sem vendedor ligado. O RLS garante isso
+no banco (policy `"inscricoes: formulário público só cria pendente"`) — o
+formulário **nunca** consegue ler, mudar ou criar algo com valor. Quando a
+pessoa paga pessoalmente, o dev confirma em Inscrições (botão "Confirmar
+pagamento" nas pendentes), que reabre `ModalInscricao.jsx` em modo edição
+pra completar valor e forma de pagamento.
+
+> Esse formulário usa o cliente `supabaseAnonimo` (`src/lib/supabase.js`),
+> não o `supabase` normal — de propósito, pra nunca herdar uma sessão de
+> líder/dev já salva no mesmo aparelho. Ver "Convenções" abaixo.
+
+### Notificações push
+
+`ConviteParaNotificar.jsx` pede permissão e salva a inscrição
+(`salvarInscricaoPush`); `notificarVendedores` (líder, em Configurações)
+dispara via Edge Function. Tudo depende de `VITE_VAPID_PUBLIC_KEY` estar
+configurada — sem ela o convite nem aparece.
+
+### Instalar como app (PWA)
+
+`ConviteParaInstalar.jsx` + `GuiaDeInstalacaoIphone.jsx` + `sw.js` +
+`manifest.webmanifest`. Sem banco de dados envolvido — é tudo arquivo
+estático em `public/`. O Android oferece instalação nativa quando o
+navegador dispara o evento; sem o evento (ou no iPhone, que não tem esse
+evento), cai no guia manual.
+
+### Mensagem pronta no WhatsApp
+
+`utils/whatsapp.js` monta o texto (venda, termo, acesso ao app); o app nunca
+envia sozinho — abre a conversa com o texto pronto e quem vende/lidera
+aperta enviar. Enviar de verdade sem toque exigiria a API oficial da Meta
+(conta business, modelos homologados, custo por mensagem) — fora de escopo
+de propósito.
+
+---
+
+## Convenções e pegadinhas
+
+- **O front-end nunca decide permissão sozinho.** Se vai adicionar uma ação
+  nova que mexe em dado sensível, a regra de quem pode tem de existir no
+  Postgres (policy de RLS ou `SECURITY DEFINER`) — esconder um botão não
+  basta, é só UX.
+- **`schema.sql` é a fonte única de verdade do banco** e é seguro rodar
+  inteiro de novo a qualquer momento (todo `create` é condicional). Não crie
+  arquivos de migration separados — edite este arquivo.
+- **Nunca intercepte método diferente de GET no `sw.js`.** Já causou um bug
+  real: refazer um `fetch` de um POST com corpo binário (foto de
+  comprovante) dentro do service worker perde o corpo pelo caminho e dá "No
+  content provided". O service worker só existe pra destravar o botão
+  "Instalar" do Android — não tem cache, de propósito (republicar não pode
+  deixar ninguém preso numa versão velha).
+- **Numeração de rifa = menor número livre do grupo**, não um sequence.
+  Apagar uma venda de teste libera o número dela de novo. Ver
+  `definir_grupo_e_numero()`.
+- **Nunca commitar a `service_role` / `secret key` do Supabase.** Ela não
+  tem lugar nenhum no front-end nem no `.env.local` — só existe dentro de
+  Edge Functions, injetada automaticamente pelo Supabase.
+- **Toda tela/fluxo que calcula valor de rifa deve resolver o preço por
+  vendedor** (`precoDoVendedor`/`metaDoVendedor` em `utils/calculos.js`), por
+  causa do chalé x quarto do Kombo. Um `config.precoRifa` lido direto numa
+  tela nova provavelmente está errado.
+- **O formulário público (`/inscricao/:grupo`) usa `supabaseAnonimo`, não o
+  `supabase` do resto do app.** Se reaproveitar o cliente normal (que guarda
+  sessão em `localStorage`), um aparelho que já tem login de líder salvo
+  manda a requisição autenticada como esse líder em vez de anônimo — já foi
+  bug em produção.
+- **CSS por grupo é só `data-grupo` + `tokens.css`.** Nunca hardcode uma cor
+  de grupo num `.module.css` — usa a variável.
+- **A CLI do Supabase já está instalada e linkada** nesta máquina ao projeto
+  de produção (`odgweocenaopqxjgpdqm`). `supabase functions deploy <nome>`
+  funciona direto, sem precisar rodar `supabase link` de novo.
+
+---
+
+## Arquivos legados
+
+`rifas-acampamento.html`, na raiz, é a versão original feita no Claude.ai
+(single-file, usava `window.storage`). Não funciona mais fora de lá — ficou
+só como referência do visual e das regras de negócio originais. Pode ser
+removido com segurança quando não precisar mais consultar.
