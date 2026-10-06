@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import estilos from './Modal.module.css'
 
 /**
@@ -10,6 +10,12 @@ import estilos from './Modal.module.css'
  * terminar de ler, e que um toque fora fecharia sem querer.
  */
 export default function Modal({ titulo, aoFechar, children, rodape, soFechaNoX }) {
+  // O toque precisa COMEÇAR no fundo, não só terminar lá — ao escolher uma
+  // foto (comprovante, termo...), o seletor nativo do celular às vezes
+  // devolve um "toque fantasma" bem no fundo da tela ao fechar, e sem essa
+  // trava isso fechava o modal sozinho antes da pessoa salvar.
+  const comecouNoFundo = useRef(false)
+
   useEffect(() => {
     if (soFechaNoX) return undefined
 
@@ -21,7 +27,16 @@ export default function Modal({ titulo, aoFechar, children, rodape, soFechaNoX }
   }, [aoFechar, soFechaNoX])
 
   return (
-    <div className={estilos.fundo} onClick={soFechaNoX ? undefined : aoFechar}>
+    <div
+      className={estilos.fundo}
+      onPointerDown={(e) => {
+        comecouNoFundo.current = e.target === e.currentTarget
+      }}
+      onClick={(e) => {
+        if (soFechaNoX) return
+        if (comecouNoFundo.current && e.target === e.currentTarget) aoFechar()
+      }}
+    >
       <div className={estilos.caixa} onClick={(e) => e.stopPropagation()}>
         {soFechaNoX ? (
           <div className={estilos.cabecalho}>
