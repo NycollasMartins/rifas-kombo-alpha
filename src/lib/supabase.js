@@ -74,15 +74,3 @@ export const supabase = supabaseConfigurado
       },
     })
   : null
-
-/**
- * Cliente "sem memória", sem sessão nenhuma — para telas públicas (como o
- * formulário de inscrição por QR code). Se não existisse, quem já estivesse
- * logado como líder nesse mesmo aparelho acabaria usando a sessão dele sem
- * querer, e o pedido deixaria de valer como anônimo.
- */
-export const supabaseAnonimo = supabaseConfigurado
-  ? createClient(url, chaveAnon, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    })
-  : null

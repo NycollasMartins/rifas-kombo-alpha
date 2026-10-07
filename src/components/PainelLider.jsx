@@ -8,7 +8,6 @@ import AbaSorteio from './lider/AbaSorteio'
 import AbaUsuarios from './lider/AbaUsuarios'
 import AbaConfiguracoes from './lider/AbaConfiguracoes'
 import AbaManutencao from './lider/AbaManutencao'
-import AbaInscricoes from './lider/AbaInscricoes'
 import { useSessao } from '../hooks/useSessao'
 import { infoDoGrupo } from '../utils/grupos'
 import estilos from './PainelLider.module.css'
@@ -26,18 +25,13 @@ const ABAS = [
 // outros é o banco — as regras do Postgres, não este array.
 const ABA_DO_DEV = { chave: 'manutencao', rotulo: 'Manutenção', Componente: AbaManutencao }
 
-// Fase de teste: inscrições só aparecem pro dev, mesmo quem tem "corrigir
-// venda" liberado não vê ainda. Quando validar, troca a condição abaixo.
-const ABA_INSCRICOES = { chave: 'inscricoes', rotulo: 'Inscrições', Componente: AbaInscricoes }
-
 /** Casca do painel do líder: cabeçalho, abas e a aba escolhida. */
 export default function PainelLider() {
   const { email, eDev, podeCorrigirVenda, grupo, sair } = useSessao()
   const info = infoDoGrupo(grupo)
   const [abaAtiva, setAbaAtiva] = useState('painel')
 
-  let abas = eDev || podeCorrigirVenda ? [...ABAS, ABA_DO_DEV] : ABAS
-  if (eDev) abas = [...abas, ABA_INSCRICOES]
+  const abas = eDev || podeCorrigirVenda ? [...ABAS, ABA_DO_DEV] : ABAS
   const { Componente } = abas.find((a) => a.chave === abaAtiva) || abas[0]
 
   return (

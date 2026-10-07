@@ -156,7 +156,7 @@ select table_name from information_schema.tables
 where table_schema = 'public' order by table_name;
 ```
 
-Devem aparecer oito: `codigos_acesso`, `config`, `inscricoes`,
+Devem aparecer nove: `codigos_acesso`, `config`, `integracao_webhook`,
 `inscricoes_push`, `perfis`, `sorteios`, `vendas`, `vendedores`,
 `vendedores_privado`.
 
@@ -220,11 +220,11 @@ seguir). Resumo das tabelas:
 |---|---|
 | `config` | preço da rifa, meta padrão, prazo, prêmio — uma linha por grupo. Inclui `preco_rifa_chale`/`meta_chale`, usados só pelo Kombo (ver [chalé x quarto](#preço-por-destino-chalé-x-quarto--só-kombo)) |
 | `codigos_acesso` | hash dos códigos de liderança e de autocadastro — nunca legível, só comparável por função |
-| `vendedores` | cadastro, `situacao` (`ativo` / `quitou` / `desistiu` / `inscrito`), `tipo` (`adolescente` / `voluntario`), `destino` (`quarto` / `chale`, só Kombo) |
+| `vendedores` | cadastro, `situacao` (`ativo` / `quitou` / `desistiu`), `tipo` (`adolescente` / `voluntario`), `destino` (`quarto` / `chale`, só Kombo) |
 | `perfis` | o papel de cada conta logada (`dev` / `lider` / `vendedor`) e o `vendedor_id` quando for vendedor |
 | `vendedores_privado` | observações e termo assinado — líder vê, vendedor não vê nem o próprio |
 | `vendas` | cada rifa vendida, com `status` (pago/pendente) e `repasse` (pendente/entregue/confirmado) |
-| `inscricoes` | quem já garantiu vaga no acampamento, direto ou vendendo rifas — ver [Inscrições](#inscrições-fase-de-teste---só-dev) |
+| `integracao_webhook` | URL e segredo do aviso automático pro outro sistema — ver [Integração por webhook](#integração-por-webhook) |
 | `inscricoes_push` | assinatura de notificação push por vendedor |
 | `sorteios` | histórico de sorteios |
 
@@ -239,7 +239,7 @@ seguir). Resumo das tabelas:
 | Vê termos assinados e observações | ❌ | ✅ | ✅ |
 | Corrige venda já registrada | ❌ | ❌ | ✅ |
 | Transfere rifas entre vendedores | ❌ | ❌ | ✅ |
-| Vê/edita Inscrições (fase de teste) | ❌ | ❌ | ✅ |
+| Configura o webhook de integração | ❌ | ❌ | ✅ |
 
 Cada linha é uma policy de RLS ou uma checagem dentro de uma função
 `SECURITY DEFINER` — não uma tela escondida.
@@ -312,17 +312,11 @@ public/                      Servidos como estão
   icone-*.png, apple-touch-icon.png
 
 src/
-  main.jsx                   Ponto de entrada. Decide ANTES de tudo se a URL
-                              é o formulário público (/inscricao/alpha ou
-                              /inscricao/kombo) ou o app normal
-  App.jsx                    Dentro do app normal: só decide qual tela mostrar
-                              conforme sessão/papel
+  main.jsx                   Ponto de entrada
+  App.jsx                    Só decide qual tela mostrar conforme sessão/papel
 
   lib/
-    supabase.js              Dois clientes: `supabase` (guarda sessão,
-                              usado pelo app inteiro) e `supabaseAnonimo`
-                              (sem sessão nenhuma, só pro formulário público —
-                              ver "Convenções")
+    supabase.js              Conexão (único cliente, guarda sessão)
     db/                      Uma chamada RPC ou query por arquivo, nomeado
                               pelo domínio:
       entrada.js              Login, autocadastro, cadastro de líder, códigos
@@ -331,19 +325,20 @@ src/
       vendedoresPrivado.js       Observações e termos — nunca sem login
       arquivos.js                 Upload/link de termos e comprovantes
       vendas.js                    Registro em lote, correção, agrupamento
-      inscricoes.js                 Inscrições diretas, por rifa, públicas
       sorteios.js                   Histórico
-      fechamento.js                 Fechar meta, transferir rifas, apagar grupo
+      fechamento.js                 Fechar meta, finalizar, transferir rifas,
+                                     apagar grupo
       perfis.js                     Lista/gestão de líderes
-      notificacoes.js                Push: salvar inscrição, disparar aviso
-      erros.js                       Traduz erro técnico -> frase em português
+      integracao.js                  URL/segredo do webhook — por grupo
+      notificacoes.js                 Push: salvar inscrição, disparar aviso
+      erros.js                        Traduz erro técnico -> frase em português
 
   hooks/
     useSessao.jsx             Quem está logado: papel, grupo, todas as ações
                                de entrar/cadastrar/trocar senha
     useDadosRifa.jsx           Carrega tudo do grupo ativo, escuta Realtime,
                                expõe as ações (adicionarVendedor, fecharMeta,
-                               inscreverVendedorPorRifa, etc.)
+                               marcarComoFinalizado, etc.)
 
   utils/
     grupos.js                  Alpha/Kombo: nomes, siglas, rótulos
@@ -356,15 +351,14 @@ src/
   components/
     Tela*                       Telas de nível superior (entrada, login,
                                  sem-acesso, vendedor)
-    PainelLider.jsx              Casca do painel: cabeçalho + abas. Abas
-                                 "Manutenção" e "Inscrições" só aparecem
-                                 condicionadas a papel (ver código)
+    PainelLider.jsx              Casca do painel: cabeçalho + abas. A aba
+                                 "Manutenção" só aparece condicionada a papel
+                                 (ver código)
     lider/Aba*.jsx                Uma aba = um arquivo (Painel, Vendas,
                                  Vendedores, Sorteio, Usuários,
-                                 Configurações, Manutenção, Inscrições)
+                                 Configurações, Manutenção)
     Modal*.jsx                    Cada fluxo que abre em modal tem o seu
-    FormularioInscricaoPublico.jsx Formulário sem login, aberto via QR code
-    lider/CartaoQrCode*.jsx         Geram e mostram os QR codes
+    lider/CartaoQrCode.jsx          QR code de acesso ao app
 
   styles/
     tokens.css                  As três peles (neutra, Alpha, Kombo) — só
@@ -421,47 +415,53 @@ tem conta) → `redefinirSenhaDoVendedor` em `useSessao.jsx` → Edge Function
 senha"`, em `TelaVendedorEntrada.jsx`) continua existindo em paralelo, mas
 pra vendedor costuma ser mais prático o líder resolver na hora.
 
-### Inscrições (fase de teste — só dev)
+### Integração por webhook
 
-Tabela `inscricoes`: quem já garantiu vaga no acampamento, seja pagando o
-ingresso direto, seja vendendo todas as rifas. Dois jeitos de uma linha
-nascer ali:
+Quando a situação de um vendedor passa a `'quitou'` (meta fechada — pelo
+botão "Fechar meta"/"Finalizar" em `AbaVendedores.jsx`, ou editando a
+situação na mão em `ModalVendedor.jsx`), o **próprio Postgres** avisa um
+sistema externo via HTTP, sem passar pelo front-end nenhum. Existiu antes
+uma aba "Inscrições" local pra isso (tabela, QR code, formulário público);
+saiu de cena — quem acompanha isso agora é o outro sistema.
 
-1. **Direto**, pelo dev dentro do painel (`+ Nova inscrição` em
-   `AbaInscricoes.jsx`), ou pelo **formulário público** (ver abaixo).
-2. **Vendendo rifas** — botão "Inscrever" em `AbaVendedores.jsx` (só
-   aparece pro dev, vendedor com `situacao = 'ativo'`). Abre
-   `ModalInscricao.jsx`, que chama `inscreverVendedorPorRifa` em
-   `useDadosRifa.jsx`: se a meta ainda não foi batida, fecha ela primeiro
-   (mesmo mecanismo do botão "Fechar meta"); depois cria a inscrição e muda
-   `situacao` pra `'inscrito'`. A partir daí ele **some da aba Vendedores** e
-   aparece em Inscrições.
+**Como funciona:** a função `avisar_vendedor_finalizado()` (gatilho na
+tabela `vendedores`, seção "7-B" do `schema.sql`) compara o valor antigo com
+o novo a cada `update`. Só dispara na transição pra `'quitou'` — se o
+vendedor já estava `'quitou'` e continua (ex: pegou mais uma rifa depois,
+editaram o telefone dele), não manda de novo. Isso resolve o "avisar uma
+única vez por vendedor" sem precisar de nenhum controle extra no código.
 
-**A aba só aparece pra `eDev`** — de propósito, pra testar antes de abrir pra
-liderança. Pra liberar, em `PainelLider.jsx` troca a condição que inclui
-`ABA_INSCRICOES`, e no `schema.sql` troca a política `"inscricoes: só o dev,
-por enquanto"` de `public.e_dev()` para `public.e_lider() and
-public.posso_ver(grupo)` (tem um comentário no schema exatamente nesse
-ponto).
+O disparo usa a extensão `pg_net` (`net.http_post`, assíncrona — não trava a
+venda nem a edição) e manda:
 
-#### Formulário público por QR code
+```json
+{
+  "evento": "vendedor_finalizado",
+  "vendedorId": "...",
+  "nome": "...",
+  "telefone": "...",
+  "email": "...",
+  "grupo": "Alpha",
+  "finalizadoEm": "2026-10-06T14:30:00Z"
+}
+```
 
-`FormularioInscricaoPublico.jsx`, servido em `/inscricao/alpha` ou
-`/inscricao/kombo` — **sem login**. `main.jsx` detecta esse caminho antes de
-montar o app normal e renderiza só esse formulário. O QR de cada grupo é
-gerado em `lider/CartaoQrCodeInscricao.jsx` (dentro da aba Inscrições).
+com o cabeçalho `X-Webhook-Secret` (o valor configurado, pra o outro lado
+conferir que veio daqui).
 
-A pessoa preenche só nome e telefone; isso cria uma `inscricao` com
-`status = 'pendente'`, `valor = 0`, sem vendedor ligado. O RLS garante isso
-no banco (policy `"inscricoes: formulário público só cria pendente"`) — o
-formulário **nunca** consegue ler, mudar ou criar algo com valor. Quando a
-pessoa paga pessoalmente, o dev confirma em Inscrições (botão "Confirmar
-pagamento" nas pendentes), que reabre `ModalInscricao.jsx` em modo edição
-pra completar valor e forma de pagamento.
+**Configuração:** tabela `integracao_webhook`, uma linha por grupo (`url` +
+`segredo`). Enquanto `url` estiver vazia, o gatilho não manda nada — a
+integração nasce desligada. Dá pra configurar de dois jeitos:
 
-> Esse formulário usa o cliente `supabaseAnonimo` (`src/lib/supabase.js`),
-> não o `supabase` normal — de propósito, pra nunca herdar uma sessão de
-> líder/dev já salva no mesmo aparelho. Ver "Convenções" abaixo.
+- **Pelo app:** Configurações → "Integração por webhook" (só aparece pro
+  dev).
+- **Por SQL**, direto no banco:
+  ```sql
+  update public.integracao_webhook
+     set url = 'https://seu-outro-sistema.com/webhook/rifas',
+         segredo = 'uma-palavra-combinada-com-o-outro-sistema'
+   where grupo = 'Alpha'; -- repete trocando pra 'Kombo'
+  ```
 
 ### Notificações push
 
@@ -513,11 +513,12 @@ de propósito.
   vendedor** (`precoDoVendedor`/`metaDoVendedor` em `utils/calculos.js`), por
   causa do chalé x quarto do Kombo. Um `config.precoRifa` lido direto numa
   tela nova provavelmente está errado.
-- **O formulário público (`/inscricao/:grupo`) usa `supabaseAnonimo`, não o
-  `supabase` do resto do app.** Se reaproveitar o cliente normal (que guarda
-  sessão em `localStorage`), um aparelho que já tem login de líder salvo
-  manda a requisição autenticada como esse líder em vez de anônimo — já foi
-  bug em produção.
+- **Webhook pra sistema externo é gatilho no banco, não código no app.**
+  O aviso de "vendedor finalizou" (`avisar_vendedor_finalizado()`) dispara
+  comparando o valor antigo com o novo no próprio Postgres — não existe
+  nenhum `fetch` equivalente no front-end, e não deveria existir: botão
+  clicado duas vezes, aba fechada no meio, requisição que falha — nada disso
+  afeta um gatilho de banco, afetaria uma chamada feita pelo navegador.
 - **CSS por grupo é só `data-grupo` + `tokens.css`.** Nunca hardcode uma cor
   de grupo num `.module.css` — usa a variável.
 - **A CLI do Supabase já está instalada e linkada** nesta máquina ao projeto

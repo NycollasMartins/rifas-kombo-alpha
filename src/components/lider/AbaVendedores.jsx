@@ -3,7 +3,6 @@ import EstadoVazio from '../EstadoVazio'
 import EtiquetaSituacao from '../EtiquetaSituacao'
 import ModalVendedor from '../ModalVendedor'
 import ModalVendasDoVendedor from '../ModalVendasDoVendedor'
-import ModalInscricao from '../ModalInscricao'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
 import { useSessao } from '../../hooks/useSessao'
 import { precoDoVendedor, resumoDoVendedor, vendasDoVendedor } from '../../utils/calculos'
@@ -16,19 +15,27 @@ import estilos from './AbaVendedores.module.css'
 
 /** Os vendedores do grupo: cadastro, termo, vendas e fechamento de meta. */
 export default function AbaVendedores() {
-  const { config, vendedores: todosDoGrupo, vendas, dadosPrivados, removerVendedor, fecharMeta } =
-    useDadosRifa()
-  const { grupo, eDev } = useSessao()
+  const {
+    config,
+    vendedores: todosDoGrupo,
+    vendas,
+    dadosPrivados,
+    removerVendedor,
+    fecharMeta,
+    marcarComoFinalizado,
+  } = useDadosRifa()
+  const { grupo } = useSessao()
 
-  // Quem já virou inscrito some daqui — ele mora na aba Inscrições agora.
+  // Quem já finalizou (meta fechada) some daqui — o aviso pro outro sistema
+  // dispara sozinho no banco nesse momento, ver avisar_vendedor_finalizado
+  // no schema.sql.
   const vendedores = useMemo(
-    () => todosDoGrupo.filter((v) => v.situacao !== 'inscrito'),
+    () => todosDoGrupo.filter((v) => v.situacao !== 'quitou'),
     [todosDoGrupo]
   )
 
   const [emEdicao, setEmEdicao] = useState(null) // 'novo' | vendedor
   const [vendoVendasDe, setVendoVendasDe] = useState(null)
-  const [inscrevendo, setInscrevendo] = useState(null) // { vendedor, precisaFechar }
   const [erro, setErro] = useState('')
   const [ocupado, setOcupado] = useState('')
   const [busca, setBusca] = useState('')
@@ -72,23 +79,45 @@ export default function AbaVendedores() {
     }
   }
 
+  /**
+   * Fecha a conta do vendedor. Se ainda faltava bater a meta, registra as
+   * rifas que faltam no nome dele (fluxo de sempre); se ele já tinha batido
+   * sozinho, só confirma e muda a situação — os dois casos terminam em
+   * "quitou", que é o que avisa o outro sistema.
+   */
   async function fechar(resumo) {
     const preco = precoDoVendedor(resumo.vendedor, config)
-    const quantas = rifasParaFecharMeta(resumo.faltante, preco)
-    const confirmacao =
-      `${resumo.vendedor.nome} arrecadou ${formatarMoeda(resumo.total)} de ` +
-      `${formatarMoeda(resumo.meta)}.\n\n` +
-      `Registrar ${quantas} rifa(s) no nome dele, totalizando ` +
-      `${formatarMoeda(quantas * preco)}?\n\n` +
-      'São rifas de verdade: entram no sorteio e no CSV.'
-    if (!confirm(confirmacao)) return
+
+    if (resumo.faltante > 0) {
+      const quantas = rifasParaFecharMeta(resumo.faltante, preco)
+      const confirmacao =
+        `${resumo.vendedor.nome} arrecadou ${formatarMoeda(resumo.total)} de ` +
+        `${formatarMoeda(resumo.meta)}.\n\n` +
+        `Registrar ${quantas} rifa(s) no nome dele, totalizando ` +
+        `${formatarMoeda(quantas * preco)}?\n\n` +
+        'São rifas de verdade: entram no sorteio e no CSV.'
+      if (!confirm(confirmacao)) return
+
+      setErro('')
+      setOcupado(resumo.vendedor.id)
+      try {
+        await fecharMeta(resumo.vendedor.id)
+      } catch (e) {
+        setErro(traduzirErro(e, 'Não foi possível fechar a meta.'))
+      } finally {
+        setOcupado('')
+      }
+      return
+    }
+
+    if (!confirm(`${resumo.vendedor.nome} já bateu a meta. Marcar como finalizado?`)) return
 
     setErro('')
     setOcupado(resumo.vendedor.id)
     try {
-      await fecharMeta(resumo.vendedor.id)
+      await marcarComoFinalizado(resumo.vendedor.id)
     } catch (e) {
-      setErro(traduzirErro(e, 'Não foi possível fechar a meta.'))
+      setErro(traduzirErro(e, 'Não foi possível finalizar.'))
     } finally {
       setOcupado('')
     }
@@ -152,7 +181,7 @@ export default function AbaVendedores() {
             const resumo = resumoDoVendedor(vendedor, vendas, config)
             const temTermo =
               Boolean(dadosPrivados[vendedor.id]?.termoPath) || Boolean(vendedor.termoDigitalEm)
-            const podeFechar = vendedor.situacao !== 'desistiu' && resumo.faltante > 0
+            const podeFechar = vendedor.situacao === 'ativo'
 
             return (
               <div key={vendedor.id} className={estilos.linha}>
@@ -173,7 +202,7 @@ export default function AbaVendedores() {
                     {resumo.quantidade} rifas
                     {resumo.quantidadePropria > 0 && ` (${resumo.quantidadePropria} próprias)`}
                   </div>
-                  {podeFechar && (
+                  {podeFechar && resumo.faltante > 0 && (
                     <div className={estilos.faltante}>
                       faltam {formatarMoeda(resumo.faltante)} ·{' '}
                       {rifasParaFecharMeta(resumo.faltante, precoDoVendedor(vendedor, config))} rifas
@@ -191,17 +220,11 @@ export default function AbaVendedores() {
                       onClick={() => fechar(resumo)}
                       disabled={ocupado === vendedor.id}
                     >
-                      {ocupado === vendedor.id ? '…' : 'Fechar meta'}
-                    </button>
-                  )}
-                  {eDev && vendedor.situacao === 'ativo' && (
-                    <button
-                      className="btn btn-sm"
-                      onClick={() =>
-                        setInscrevendo({ vendedor, precisaFechar: resumo.faltante > 0 })
-                      }
-                    >
-                      Inscrever
+                      {ocupado === vendedor.id
+                        ? '…'
+                        : resumo.faltante > 0
+                          ? 'Fechar meta'
+                          : 'Finalizar'}
                     </button>
                   )}
                   <button className="btn-ghost btn-sm" onClick={() => setEmEdicao(vendedor)}>
@@ -228,15 +251,6 @@ export default function AbaVendedores() {
         <ModalVendasDoVendedor
           vendedor={vendoVendasDe}
           aoFechar={() => setVendoVendasDe(null)}
-        />
-      )}
-
-      {inscrevendo && (
-        <ModalInscricao
-          vendedor={inscrevendo.vendedor}
-          precisaFechar={inscrevendo.precisaFechar}
-          valorSugerido={resumoDoVendedor(inscrevendo.vendedor, vendas, config).meta}
-          aoFechar={() => setInscrevendo(null)}
         />
       )}
     </>

@@ -10,7 +10,6 @@ export const SITUACOES = {
   ativo: 'Ativo',
   quitou: 'Meta fechada',
   desistiu: 'Desistiu',
-  inscrito: 'Inscrito',
 }
 
 export function desistiu(vendedor) {

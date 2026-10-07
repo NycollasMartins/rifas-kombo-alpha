@@ -97,13 +97,4 @@ export async function enviarComprovante(grupo, loteId, arquivo) {
   return enviar('comprovantes', caminho, arquivo)
 }
 
-/** Mesmo bucket das rifas, usado também pelo comprovante de uma inscrição. */
-export async function enviarComprovanteDeInscricao(grupo, inscricaoId, arquivo) {
-  const problema = validarArquivo(arquivo)
-  if (problema) throw new Error(problema)
-
-  const caminho = `${grupo}/inscricao-${inscricaoId}.${extensaoDe(arquivo)}`
-  return enviar('comprovantes', caminho, arquivo)
-}
-
 export const gerarLinkDoComprovante = (caminho) => gerarLink('comprovantes', caminho)

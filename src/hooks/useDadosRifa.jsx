@@ -22,12 +22,6 @@ import { listarSorteios, registrarSorteio } from '../lib/db/sorteios'
 import { assinarTermo } from '../lib/db/entrada'
 import { listarDadosPrivados, salvarDadosPrivados } from '../lib/db/vendedoresPrivado'
 import { apagarDadosDoGrupo, fecharMetaDoVendedor, transferirVendas } from '../lib/db/fechamento'
-import {
-  atualizarInscricao,
-  criarInscricao,
-  excluirInscricao,
-  listarInscricoes,
-} from '../lib/db/inscricoes'
 import { traduzirErro } from '../lib/db/erros'
 import { useSessao } from './useSessao'
 
@@ -52,7 +46,7 @@ function mesclar(lista, item) {
 const remover = (lista, id) => lista.filter((i) => i.id !== id)
 
 export function ProvedorDadosRifa({ children }) {
-  const { temAcesso, grupo, vendedorId, eLider, eDev } = useSessao()
+  const { temAcesso, grupo, vendedorId, eLider } = useSessao()
 
   // Guardamos tudo que o banco devolveu. Para líder e vendedor isso já é só o
   // grupo deles; para o dev vêm os dois, e o filtro por grupoAtivo acontece
@@ -62,7 +56,6 @@ export function ProvedorDadosRifa({ children }) {
   const [todasVendas, setTodasVendas] = useState([])
   const [todosSorteios, setTodosSorteios] = useState([])
   const [dadosPrivados, setDadosPrivados] = useState({})
-  const [todasInscricoes, setTodasInscricoes] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erroCarregamento, setErroCarregamento] = useState('')
 
@@ -76,20 +69,18 @@ export function ProvedorDadosRifa({ children }) {
       }
       if (!silencioso) setCarregando(true)
       try {
-        const [cfgs, vds, vs, srt, priv, insc] = await Promise.all([
+        const [cfgs, vds, vs, srt, priv] = await Promise.all([
           listarConfigs(),
           listarVendedores(),
           listarVendas(),
           listarSorteios(),
           eLider ? listarDadosPrivados() : Promise.resolve({}),
-          eDev ? listarInscricoes() : Promise.resolve([]),
         ])
         setConfigsPorGrupo(cfgs)
         setTodosVendedores(vds)
         setTodasVendas(vs)
         setTodosSorteios(srt)
         setDadosPrivados(priv)
-        setTodasInscricoes(insc)
         setErroCarregamento('')
         jaCarregou.current = true
       } catch (erro) {
@@ -100,7 +91,7 @@ export function ProvedorDadosRifa({ children }) {
         if (!silencioso) setCarregando(false)
       }
     },
-    [temAcesso, eLider, eDev]
+    [temAcesso, eLider]
   )
 
   useEffect(() => {
@@ -158,10 +149,6 @@ export function ProvedorDadosRifa({ children }) {
     () => todosSorteios.filter((s) => s.grupo === grupo),
     [todosSorteios, grupo]
   )
-  const inscricoes = useMemo(
-    () => todasInscricoes.filter((i) => i.grupo === grupo),
-    [todasInscricoes, grupo]
-  )
 
   const valor = useMemo(
     () => ({
@@ -169,7 +156,6 @@ export function ProvedorDadosRifa({ children }) {
       vendedores,
       vendas,
       sorteios,
-      inscricoes,
       dadosPrivados,
       carregando,
       erroCarregamento,
@@ -248,59 +234,29 @@ export function ProvedorDadosRifa({ children }) {
         return atualizada
       },
 
+      /**
+       * Fecha a meta do vendedor: se ainda faltava, registra as rifas que
+       * faltam no nome dele (via fecharMetaDoVendedor); se já tinha batido,
+       * só muda a situação pra "quitou". Os dois casos acabam no mesmo
+       * lugar — e é essa transição pra 'quitou' que dispara o aviso pro
+       * outro sistema (ver avisar_vendedor_finalizado no schema.sql).
+       */
       async fecharMeta(id, pagamento) {
         const criadas = await fecharMetaDoVendedor(id, pagamento)
         await carregarTudo({ silencioso: true })
         return criadas
       },
 
+      async marcarComoFinalizado(id) {
+        const atualizado = await atualizarVendedor(id, { situacao: 'quitou' })
+        setTodosVendedores((a) => mesclar(a, atualizado))
+        return atualizado
+      },
+
       async passarVendasPara(deId, paraId) {
         const total = await transferirVendas(deId, paraId)
         await carregarTudo({ silencioso: true })
         return total
-      },
-
-      /** Inscrição direta: alguém pagou o ingresso sem passar pela rifa. */
-      async adicionarInscricao(dados) {
-        const nova = await criarInscricao({ ...dados, grupo, forma: 'direto' })
-        setTodasInscricoes((a) => [nova, ...a])
-        return nova
-      },
-
-      /**
-       * Acerto do vendedor: ele vira inscrito (sai da lista de quem ainda
-       * vende) e ganha uma inscrição ligada à própria venda de rifas. Se
-       * ainda faltava bater a meta, fecha ela primeiro (como "Fechar meta"
-       * já fazia), registrando as rifas que faltavam no nome dele.
-       */
-      async inscreverVendedorPorRifa(vendedor, dados, precisaFechar) {
-        if (precisaFechar) {
-          await fecharMetaDoVendedor(vendedor.id, dados.pagamento)
-        }
-        const nova = await criarInscricao({
-          ...dados,
-          grupo: vendedor.grupo,
-          nome: vendedor.nome,
-          forma: 'rifa',
-          vendedorId: vendedor.id,
-        })
-        const atualizado = await atualizarVendedor(vendedor.id, { situacao: 'inscrito' })
-        setTodasInscricoes((a) => [nova, ...a])
-        setTodosVendedores((a) => mesclar(a, atualizado))
-        if (precisaFechar) await carregarTudo({ silencioso: true })
-        return nova
-      },
-
-      /** Confirmar pagamento de uma inscrição direta pendente, ou corrigir uma. */
-      async editarInscricao(id, dados) {
-        const atualizada = await atualizarInscricao(id, dados)
-        setTodasInscricoes((a) => mesclar(a, atualizada))
-        return atualizada
-      },
-
-      async removerInscricao(id) {
-        await excluirInscricao(id)
-        setTodasInscricoes((a) => remover(a, id))
       },
 
       /** O vendedor assina o próprio termo digitando o nome. */
@@ -325,12 +281,11 @@ export function ProvedorDadosRifa({ children }) {
         setTodosVendedores((a) => a.filter((v) => v.grupo !== grupo))
         setTodasVendas((a) => a.filter((v) => v.grupo !== grupo))
         setTodosSorteios((a) => a.filter((s) => s.grupo !== grupo))
-        setTodasInscricoes((a) => a.filter((i) => i.grupo !== grupo))
         setDadosPrivados({})
       },
     }),
     [
-      config, vendedores, vendas, sorteios, inscricoes, dadosPrivados,
+      config, vendedores, vendas, sorteios, dadosPrivados,
       carregando, erroCarregamento, carregarTudo, grupo, vendedorId,
     ]
   )

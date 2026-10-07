@@ -178,10 +178,12 @@ alter table public.vendedores add column if not exists tipo text not null defaul
 alter table public.vendedores add column if not exists destino text not null default 'quarto'
   check (destino in ('quarto', 'chale'));
 
--- "inscrito" = já garantiu a vaga (direto ou vendendo todas as rifas) e sai da lista de quem ainda vende
+-- "inscrito" existiu numa fase de teste (aba Inscrições) e saiu; quem ainda
+-- tiver esse valor antigo volta a contar como "quitou" (meta fechada)
+update public.vendedores set situacao = 'quitou' where situacao = 'inscrito';
 alter table public.vendedores drop constraint if exists vendedores_situacao_check;
 alter table public.vendedores add constraint vendedores_situacao_check
-  check (situacao in ('ativo', 'quitou', 'desistiu', 'inscrito'));
+  check (situacao in ('ativo', 'quitou', 'desistiu'));
 
 -- ---- perfis: quem é quem depois de logar -----------------------------------
 --  dev      -> enxerga os dois grupos e corrige dados
@@ -260,26 +262,23 @@ create table if not exists public.sorteios (
   data     timestamptz not null default now()
 );
 
--- ---- inscricoes -------------------------------------------------------------
---  Quem já garantiu vaga no acampamento: pagando o ingresso direto, ou
---  vendendo todas as rifas (nesse caso ligado ao vendedor de origem).
---  Fase de teste: só o dev lê e escreve aqui (ver políticas de RLS abaixo).
-create table if not exists public.inscricoes (
-  id               uuid primary key default gen_random_uuid(),
-  grupo            text not null check (grupo in ('Alpha', 'Kombo')),
-  nome             text not null check (length(btrim(nome)) > 0),
-  telefone         text,
-  forma            text not null check (forma in ('direto', 'rifa')),
-  pagamento        text not null default 'dinheiro' check (pagamento in ('dinheiro', 'pix')),
-  valor            numeric(10, 2) not null default 0,
-  status           text not null default 'pago' check (status in ('pago', 'pendente')),
-  comprovante_path text,
-  vendedor_id      uuid references public.vendedores (id) on delete set null,
-  observacao       text,
-  criado_em        timestamptz not null default now()
+-- ---- inscricoes: existiu numa fase de teste e saiu -------------------------
+--  Virou a integração por webhook, logo abaixo (seção 7-B). Quem rodar este
+--  script num banco que ainda tem essa tabela da fase de teste perde ela.
+drop table if exists public.inscricoes cascade;
+
+-- ---- integracao_webhook: pra onde avisar quando um vendedor finaliza ------
+--  Uma linha por grupo. Enquanto "url" estiver vazio, a integração fica
+--  desligada (o gatilho não manda nada) — ver a função
+--  avisar_vendedor_finalizado() na seção 7-B.
+create table if not exists public.integracao_webhook (
+  grupo         text primary key check (grupo in ('Alpha', 'Kombo')),
+  url           text,
+  segredo       text, -- mandado no header X-Webhook-Secret, pro outro sistema conferir a origem
+  atualizado_em timestamptz not null default now()
 );
 
-create index if not exists inscricoes_grupo_idx on public.inscricoes (grupo);
+insert into public.integracao_webhook (grupo) values ('Alpha'), ('Kombo') on conflict (grupo) do nothing;
 
 -- ============================================================================
 --  3. QUEM SOU EU
@@ -821,7 +820,6 @@ begin
     raise exception 'Só a liderança do grupo pode apagar os dados dele.';
   end if;
 
-  delete from public.inscricoes where grupo = p_grupo;
   delete from public.sorteios where grupo = p_grupo;
   delete from public.vendas   where grupo = p_grupo;
   delete from public.vendedores where grupo = p_grupo;
@@ -829,6 +827,67 @@ begin
   -- número livre, e sem vendas no grupo o menor livre é sempre 1
 end;
 $$;
+
+-- ============================================================================
+--  7-B. INTEGRAÇÃO: avisar outro sistema quando um vendedor finaliza
+-- ----------------------------------------------------------------------------
+--  Dispara sozinho, dentro do banco, no exato instante em que a situação de
+--  um vendedor passa a ser 'quitou' — não importa se isso aconteceu pelo
+--  botão "Fechar meta" ou editando a situação na mão. Por comparar o valor
+--  ANTES (old) com o DEPOIS (new), só dispara na transição: se o vendedor já
+--  estava 'quitou' e continua 'quitou' (ex: pegou mais uma rifa depois), não
+--  manda de novo — resolve o "só uma vez" sem precisar de nenhum controle
+--  extra.
+--
+--  Fica desligado até você preencher a URL em integracao_webhook (ver
+--  README, seção "Integração por webhook").
+-- ============================================================================
+
+create extension if not exists pg_net;
+
+create or replace function public.avisar_vendedor_finalizado()
+returns trigger language plpgsql security definer set search_path = public, extensions
+as $$
+declare
+  v_url     text;
+  v_segredo text;
+begin
+  if new.situacao <> 'quitou' or old.situacao = 'quitou' then
+    return new;
+  end if;
+
+  select url, segredo into v_url, v_segredo
+    from public.integracao_webhook where grupo = new.grupo;
+
+  if v_url is null or length(btrim(v_url)) = 0 then
+    return new; -- integração não configurada pra esse grupo: não faz nada
+  end if;
+
+  perform net.http_post(
+    url     := v_url,
+    headers := jsonb_build_object(
+                 'Content-Type', 'application/json',
+                 'X-Webhook-Secret', coalesce(v_segredo, '')
+               ),
+    body    := jsonb_build_object(
+                 'evento', 'vendedor_finalizado',
+                 'vendedorId', new.id,
+                 'nome', new.nome,
+                 'telefone', new.telefone,
+                 'email', new.email,
+                 'grupo', new.grupo,
+                 'finalizadoEm', to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+               )
+  );
+
+  return new;
+end;
+$$;
+
+drop trigger if exists vendedores_avisar_finalizado on public.vendedores;
+create trigger vendedores_avisar_finalizado
+  after update on public.vendedores
+  for each row execute function public.avisar_vendedor_finalizado();
 
 -- ============================================================================
 --  8. SEGURANÇA (RLS)
@@ -846,7 +905,7 @@ alter table public.vendedores_privado  enable row level security;
 alter table public.vendas              enable row level security;
 alter table public.sorteios            enable row level security;
 alter table public.inscricoes_push     enable row level security;
-alter table public.inscricoes          enable row level security;
+alter table public.integracao_webhook  enable row level security;
 
 -- ---- config ----------------------------------------------------------------
 drop policy if exists "config: só o meu grupo" on public.config;
@@ -967,29 +1026,19 @@ create policy "sorteios: a liderança sorteia"
   on public.sorteios for insert to authenticated
   with check (public.e_lider() and public.posso_ver(grupo));
 
--- ---- inscricoes ---------------------------------------------------------------
---  Fase de teste: só o dev. Quando for liberar pra liderança, troca
---  "public.e_dev()" por "public.e_lider() and public.posso_ver(grupo)" aqui.
-drop policy if exists "inscricoes: só o dev, por enquanto" on public.inscricoes;
-create policy "inscricoes: só o dev, por enquanto"
-  on public.inscricoes for all to authenticated
-  using (public.e_dev())
-  with check (public.e_dev());
+-- ---- integracao_webhook -----------------------------------------------------
+--  Guarda a URL e o segredo do outro sistema. Só a liderança do grupo (ou o
+--  dev) vê e altera — o segredo não deve circular além disso.
+drop policy if exists "integracao_webhook: só a liderança do grupo" on public.integracao_webhook;
+create policy "integracao_webhook: só a liderança do grupo"
+  on public.integracao_webhook for select to authenticated
+  using (public.e_lider() and public.posso_ver(grupo));
 
--- Formulário público (QR code): qualquer um pode CRIAR um pedido pendente,
--- mas só isso — nunca ler, trocar ou apagar. Só entra como "pendente", sem
--- valor e sem vendedor ligado; quem confirma o pagamento e vira inscrição de
--- verdade é sempre o dev, pela policy de cima.
-drop policy if exists "inscricoes: formulário público só cria pendente" on public.inscricoes;
-create policy "inscricoes: formulário público só cria pendente"
-  on public.inscricoes for insert to anon
-  with check (
-    grupo in ('Alpha', 'Kombo')
-    and forma = 'direto'
-    and status = 'pendente'
-    and valor = 0
-    and vendedor_id is null
-  );
+drop policy if exists "integracao_webhook: só a liderança altera" on public.integracao_webhook;
+create policy "integracao_webhook: só a liderança altera"
+  on public.integracao_webhook for update to authenticated
+  using (public.e_lider() and public.posso_ver(grupo))
+  with check (public.e_lider() and public.posso_ver(grupo));
 
 -- ============================================================================
 --  9. PERMISSÕES DE TABELA
@@ -1002,14 +1051,13 @@ grant usage on schema public to anon, authenticated;
 
 revoke all on public.config, public.codigos_acesso, public.perfis, public.vendedores,
               public.vendedores_privado, public.vendas, public.sorteios, public.inscricoes_push,
-              public.inscricoes
+              public.integracao_webhook
   from anon, authenticated;
 
 grant select on public.config, public.vendedores, public.vendas, public.sorteios, public.perfis
   to authenticated;
 grant select, insert, delete on public.inscricoes_push to authenticated;
-grant select, insert, update, delete on public.inscricoes to authenticated;
-grant insert on public.inscricoes to anon;
+grant select, update on public.integracao_webhook to authenticated;
 
 grant update                 on public.config             to authenticated;
 grant insert, update, delete on public.vendedores         to authenticated;

@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
 import { useSessao } from '../../hooks/useSessao'
 import { definirCodigoDeLider, definirCodigoDeVendedor } from '../../lib/db/entrada'
 import { notificarVendedores } from '../../lib/db/notificacoes'
+import { buscarWebhook, salvarWebhook } from '../../lib/db/integracao'
 import { formatarPrazo } from '../../utils/prazo'
 import { infoDoGrupo, KOMBO } from '../../utils/grupos'
 import { traduzirErro } from '../../lib/db/erros'
@@ -11,8 +12,19 @@ import CartaoQrCode from './CartaoQrCode'
 /** Ajustes do grupo. Cada grupo tem os seus — Alpha não mexe no Kombo. */
 export default function AbaConfiguracoes() {
   const { config, salvarAjustes, apagarTudo } = useDadosRifa()
-  const { grupo, email, trocarSenha } = useSessao()
+  const { grupo, email, eDev, trocarSenha } = useSessao()
   const nomeDoGrupo = infoDoGrupo(grupo).nome
+
+  const [webhookUrl, setWebhookUrl] = useState('')
+  const [webhookSegredo, setWebhookSegredo] = useState('')
+
+  useEffect(() => {
+    if (!eDev) return
+    buscarWebhook(grupo).then(({ url, segredo }) => {
+      setWebhookUrl(url)
+      setWebhookSegredo(segredo)
+    })
+  }, [grupo, eDev])
 
   const [preco, setPreco] = useState(String(config.precoRifa))
   const [metaPadrao, setMetaPadrao] = useState(String(config.metaPadrao))
@@ -365,6 +377,48 @@ export default function AbaConfiguracoes() {
           Trocar senha
         </button>
       </div>
+
+      {eDev && (
+        <div className="card">
+          <h2>Integração por webhook</h2>
+          <p className="texto-ajuda">
+            Quando um vendedor do {nomeDoGrupo} finaliza (meta fechada), o sistema avisa essa URL
+            automaticamente — uma vez só por vendedor. Deixe em branco pra manter desligado.
+          </p>
+          <div className="field">
+            <label htmlFor="cfg-webhook-url">URL do outro sistema</label>
+            <input
+              id="cfg-webhook-url"
+              placeholder="https://..."
+              value={webhookUrl}
+              onChange={(e) => setWebhookUrl(e.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="cfg-webhook-segredo">Segredo (opcional)</label>
+            <input
+              id="cfg-webhook-segredo"
+              autoComplete="off"
+              placeholder="Vai no cabeçalho X-Webhook-Secret, pro outro sistema conferir a origem"
+              value={webhookSegredo}
+              onChange={(e) => setWebhookSegredo(e.target.value)}
+            />
+          </div>
+          <Recado cartao="webhook" />
+          <button
+            className="btn btn-primary"
+            onClick={() =>
+              tentar(
+                'webhook',
+                () => salvarWebhook(grupo, { url: webhookUrl, segredo: webhookSegredo }),
+                webhookUrl ? 'Salvo — integração ligada.' : 'Salvo — integração desligada.'
+              )
+            }
+          >
+            Salvar
+          </button>
+        </div>
+      )}
 
       <div className="card">
         <h2 style={{ color: 'var(--bad)' }}>Zona de risco</h2>
