@@ -442,12 +442,15 @@ venda nem a edição) e manda:
   "telefone": "...",
   "email": "...",
   "grupo": "Alpha",
-  "finalizadoEm": "2026-10-06T14:30:00Z"
+  "finalizadoEm": "2026-10-06T14:30:00Z",
+  "totalVendedores": 42
 }
 ```
 
 com o cabeçalho `X-Webhook-Secret` (o valor configurado, pra o outro lado
-conferir que veio daqui).
+conferir que veio daqui). `totalVendedores` é a contagem de **todos** os
+vendedores cadastrados naquele grupo no instante do envio (de qualquer
+situação — ativo, quitou ou desistiu), não só os ativos.
 
 **Configuração:** tabela `integracao_webhook`, uma linha por grupo (`url` +
 `segredo`). Enquanto `url` estiver vazia, o gatilho não manda nada — a

@@ -849,8 +849,9 @@ create or replace function public.avisar_vendedor_finalizado()
 returns trigger language plpgsql security definer set search_path = public, extensions
 as $$
 declare
-  v_url     text;
-  v_segredo text;
+  v_url             text;
+  v_segredo         text;
+  v_total_vendedores integer;
 begin
   if new.situacao <> 'quitou' or old.situacao = 'quitou' then
     return new;
@@ -862,6 +863,9 @@ begin
   if v_url is null or length(btrim(v_url)) = 0 then
     return new; -- integração não configurada pra esse grupo: não faz nada
   end if;
+
+  select count(*) into v_total_vendedores
+    from public.vendedores where grupo = new.grupo;
 
   perform net.http_post(
     url     := v_url,
@@ -876,7 +880,8 @@ begin
                  'telefone', new.telefone,
                  'email', new.email,
                  'grupo', new.grupo,
-                 'finalizadoEm', to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+                 'finalizadoEm', to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+                 'totalVendedores', v_total_vendedores
                )
   );
 
