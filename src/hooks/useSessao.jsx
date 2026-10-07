@@ -222,6 +222,11 @@ export function ProvedorSessao({ children }) {
             destino,
           })
         } catch (e) {
+          // não deixa a pessoa "logada sem acesso": sem isso, a tela trocava
+          // sozinha pra "sua conta ainda não tem acesso" antes dela sequer
+          // ler o erro (ex: código errado), e a tentativa seguinte esbarrava
+          // num cadastro pela metade
+          await supabase.auth.signOut()
           return { ok: false, erro: e.message }
         }
         setAcesso(await carregarAcesso())
@@ -241,6 +246,7 @@ export function ProvedorSessao({ children }) {
         try {
           await vincularVendedor()
         } catch (e) {
+          await supabase.auth.signOut()
           return { ok: false, erro: e.message }
         }
 
