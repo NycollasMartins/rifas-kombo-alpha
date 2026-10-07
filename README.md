@@ -448,9 +448,10 @@ venda nem a edição) e manda:
 ```
 
 com o cabeçalho `X-Webhook-Secret` (o valor configurado, pra o outro lado
-conferir que veio daqui). `totalVendedores` é a contagem de **todos** os
-vendedores cadastrados naquele grupo no instante do envio (de qualquer
-situação — ativo, quitou ou desistiu), não só os ativos.
+conferir que veio daqui). `totalVendedores` conta só quem ainda está
+**ativo** (vendendo) naquele grupo no instante do envio — o próprio
+vendedor deste aviso não entra na conta, porque a situação dele já virou
+`quitou` antes do gatilho disparar.
 
 **Configuração:** tabela `integracao_webhook`, uma linha por grupo (`url` +
 `segredo`). Enquanto `url` estiver vazia, o gatilho não manda nada — a

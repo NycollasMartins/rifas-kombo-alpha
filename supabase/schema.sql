@@ -864,8 +864,10 @@ begin
     return new; -- integração não configurada pra esse grupo: não faz nada
   end if;
 
+  -- só quem ainda está vendendo — o próprio vendedor deste aviso já está
+  -- 'quitou' nesse ponto, então ele mesmo já sai dessa conta sozinho
   select count(*) into v_total_vendedores
-    from public.vendedores where grupo = new.grupo;
+    from public.vendedores where grupo = new.grupo and situacao = 'ativo';
 
   perform net.http_post(
     url     := v_url,
