@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import EstadoVazio from '../EstadoVazio'
 import ModalEditarVenda from '../ModalEditarVenda'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
 import { useSessao } from '../../hooks/useSessao'
 import { formatarDataHora, formatarNumeroRifa, rotuloPagamento } from '../../utils/formato'
 import { traduzirErro } from '../../lib/db/erros'
+import { forcarReenvioDeWebhooks, listarTentativasDeWebhook } from '../../lib/db/integracao'
 import estilos from './AbaManutencao.module.css'
+
+const ROTULO_STATUS_WEBHOOK = { pendente: 'Pendente', sucesso: 'Entregue', falhou: 'Falhou' }
 
 /**
  * Aba do dev. É o conserto de erro: corrigir uma venda registrada errado,
@@ -24,6 +27,45 @@ export default function AbaManutencao() {
   const [para, setPara] = useState('')
   const [recado, setRecado] = useState(null)
   const [transferindo, setTransferindo] = useState(false)
+
+  const [tentativas, setTentativas] = useState([])
+  const [carregandoWebhook, setCarregandoWebhook] = useState(false)
+  const [reenviando, setReenviando] = useState(false)
+  const [erroWebhook, setErroWebhook] = useState('')
+
+  async function carregarTentativas() {
+    if (!eDev) return
+    setCarregandoWebhook(true)
+    try {
+      setTentativas(await listarTentativasDeWebhook())
+      setErroWebhook('')
+    } catch (e) {
+      setErroWebhook(traduzirErro(e, 'Não foi possível carregar o histórico.'))
+    } finally {
+      setCarregandoWebhook(false)
+    }
+  }
+
+  useEffect(() => {
+    carregarTentativas()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eDev])
+
+  async function reenviarAgora() {
+    setReenviando(true)
+    setErroWebhook('')
+    try {
+      await forcarReenvioDeWebhooks()
+      await carregarTentativas()
+    } catch (e) {
+      setErroWebhook(traduzirErro(e, 'Não foi possível reenviar.'))
+    } finally {
+      setReenviando(false)
+    }
+  }
+
+  const pendentes = tentativas.filter((t) => t.status === 'pendente').length
+  const falhas = tentativas.filter((t) => t.status === 'falhou').length
 
   const encontradas = useMemo(() => {
     const termo = busca.trim().toLowerCase()
@@ -170,6 +212,59 @@ export default function AbaManutencao() {
           {transferindo ? 'Transferindo…' : 'Transferir'}
         </button>
       </div>
+      )}
+
+      {eDev && (
+        <div className="card">
+          <h2>Avisos do webhook (vendedor finalizado)</h2>
+          <p className="texto-ajuda">
+            Cada vez que um vendedor finaliza, o banco tenta avisar o outro sistema sozinho, e
+            tenta de novo a cada 5 minutos se não conseguir (até 6 vezes). Aqui dá pra ver o que
+            está pendente ou falhou, e forçar um reenvio na hora.
+          </p>
+
+          {(pendentes > 0 || falhas > 0) && (
+            <p className={estilos.alerta} style={{ marginBottom: 10 }}>
+              {falhas > 0 && `${falhas} falha(s) `}
+              {falhas > 0 && pendentes > 0 && '· '}
+              {pendentes > 0 && `${pendentes} pendente(s)`}
+            </p>
+          )}
+
+          {erroWebhook && <p className="error-text">{erroWebhook}</p>}
+
+          {carregandoWebhook ? (
+            <p className="texto-ajuda">Carregando…</p>
+          ) : tentativas.length === 0 ? (
+            <EstadoVazio icone="📡">
+              <p>Nenhum aviso enviado ainda.</p>
+            </EstadoVazio>
+          ) : (
+            tentativas.slice(0, 15).map((t) => (
+              <div key={t.id} className={estilos.resultado}>
+                <div className={estilos.dados}>
+                  <strong>
+                    {t.nome} <span className="tag">{ROTULO_STATUS_WEBHOOK[t.status]}</span>
+                  </strong>
+                  <span>
+                    {t.grupo} · {t.tentativas} tentativa(s)
+                    {t.ultimoErro && ` · ${t.ultimoErro}`}
+                  </span>
+                  <span className={estilos.quando}>{formatarDataHora(t.atualizadoEm)}</span>
+                </div>
+              </div>
+            ))
+          )}
+
+          <button
+            className="btn btn-primary"
+            style={{ marginTop: 12 }}
+            onClick={reenviarAgora}
+            disabled={reenviando}
+          >
+            {reenviando ? 'Reenviando…' : 'Tentar reenviar agora'}
+          </button>
+        </div>
       )}
 
       {vendaEmEdicao && (

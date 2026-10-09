@@ -841,9 +841,33 @@ $$;
 --
 --  Fica desligado até você preencher a URL em integracao_webhook (ver
 --  README, seção "Integração por webhook").
+--
+--  O envio em si é assíncrono (pg_net) e não tenta de novo sozinho — por
+--  isso cada tentativa fica registrada em integracao_webhook_log, e um job
+--  agendado (reenviar_webhooks_pendentes, a cada 5 min) confere o que não
+--  teve sucesso e tenta de novo, até um limite de tentativas. Sem isso, uma
+--  falha de rede ou o outro sistema fora do ar faria perder o aviso
+--  silenciosamente, sem ninguém notar.
 -- ============================================================================
 
 create extension if not exists pg_net;
+create extension if not exists pg_cron;
+
+-- ---- integracao_webhook_log: cada tentativa de aviso, pra poder reenviar --
+create table if not exists public.integracao_webhook_log (
+  id            uuid primary key default gen_random_uuid(),
+  vendedor_id   uuid references public.vendedores (id) on delete set null,
+  grupo         text not null check (grupo in ('Alpha', 'Kombo')),
+  payload       jsonb not null,
+  request_id    bigint,  -- id devolvido pelo net.http_post, pra conferir a resposta depois
+  tentativas    integer not null default 1,
+  status        text not null default 'pendente' check (status in ('pendente', 'sucesso', 'falhou')),
+  ultimo_erro   text,
+  criado_em     timestamptz not null default now(),
+  atualizado_em timestamptz not null default now()
+);
+
+create index if not exists integracao_webhook_log_status_idx on public.integracao_webhook_log (status);
 
 create or replace function public.avisar_vendedor_finalizado()
 returns trigger language plpgsql security definer set search_path = public, extensions
@@ -852,6 +876,8 @@ declare
   v_url             text;
   v_segredo         text;
   v_total_vendedores integer;
+  v_payload         jsonb;
+  v_request_id      bigint;
 begin
   if new.situacao <> 'quitou' or old.situacao = 'quitou' then
     return new;
@@ -869,23 +895,28 @@ begin
   select count(*) into v_total_vendedores
     from public.vendedores where grupo = new.grupo and situacao = 'ativo';
 
-  perform net.http_post(
+  v_payload := jsonb_build_object(
+    'evento', 'vendedor_finalizado',
+    'vendedorId', new.id,
+    'nome', new.nome,
+    'telefone', new.telefone,
+    'email', new.email,
+    'grupo', new.grupo,
+    'finalizadoEm', to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+    'totalVendedores', v_total_vendedores
+  );
+
+  v_request_id := net.http_post(
     url     := v_url,
     headers := jsonb_build_object(
                  'Content-Type', 'application/json',
                  'X-Webhook-Secret', coalesce(v_segredo, '')
                ),
-    body    := jsonb_build_object(
-                 'evento', 'vendedor_finalizado',
-                 'vendedorId', new.id,
-                 'nome', new.nome,
-                 'telefone', new.telefone,
-                 'email', new.email,
-                 'grupo', new.grupo,
-                 'finalizadoEm', to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
-                 'totalVendedores', v_total_vendedores
-               )
+    body    := v_payload
   );
+
+  insert into public.integracao_webhook_log (vendedor_id, grupo, payload, request_id)
+  values (new.id, new.grupo, v_payload, v_request_id);
 
   return new;
 end;
@@ -895,6 +926,113 @@ drop trigger if exists vendedores_avisar_finalizado on public.vendedores;
 create trigger vendedores_avisar_finalizado
   after update on public.vendedores
   for each row execute function public.avisar_vendedor_finalizado();
+
+/**
+ * Confere os avisos que ainda não tiveram sucesso confirmado e tenta de novo.
+ * Dá 2 minutos de folga antes de mexer num registro (tempo de a resposta
+ * chegar pelo pg_net) e desiste depois de 6 tentativas (± 30 min, rodando a
+ * cada 5), marcando como 'falhou' pra aparecer pro dev em Manutenção.
+ */
+create or replace function public.reenviar_webhooks_pendentes()
+returns void language plpgsql security definer set search_path = public, extensions
+as $$
+declare
+  r              record;
+  v_status_code  integer;
+  v_error_msg    text;
+  v_tem_resposta boolean;
+  v_url          text;
+  v_segredo      text;
+  v_novo_id      bigint;
+  v_limite       constant integer := 6;
+begin
+  for r in
+    select * from public.integracao_webhook_log
+    where status = 'pendente'
+      and atualizado_em < now() - interval '2 minutes'
+    order by criado_em
+  loop
+    v_status_code  := null;
+    v_error_msg    := null;
+    v_tem_resposta := false;
+
+    if r.request_id is not null then
+      select status_code, error_msg into v_status_code, v_error_msg
+        from net._http_response where id = r.request_id;
+      v_tem_resposta := found;
+    end if;
+
+    if v_tem_resposta and v_status_code between 200 and 299 then
+      update public.integracao_webhook_log
+         set status = 'sucesso', atualizado_em = now()
+       where id = r.id;
+      continue;
+    end if;
+
+    if r.tentativas >= v_limite then
+      update public.integracao_webhook_log
+         set status = 'falhou',
+             ultimo_erro = coalesce(v_error_msg, 'sem resposta do outro sistema'),
+             atualizado_em = now()
+       where id = r.id;
+      continue;
+    end if;
+
+    select url, segredo into v_url, v_segredo
+      from public.integracao_webhook where grupo = r.grupo;
+
+    if v_url is null or length(btrim(v_url)) = 0 then
+      update public.integracao_webhook_log
+         set status = 'falhou', ultimo_erro = 'integração desligada', atualizado_em = now()
+       where id = r.id;
+      continue;
+    end if;
+
+    v_novo_id := net.http_post(
+      url     := v_url,
+      headers := jsonb_build_object(
+                   'Content-Type', 'application/json',
+                   'X-Webhook-Secret', coalesce(v_segredo, '')
+                 ),
+      body    := r.payload
+    );
+
+    update public.integracao_webhook_log
+       set request_id  = v_novo_id,
+           tentativas  = tentativas + 1,
+           ultimo_erro = v_error_msg,
+           atualizado_em = now()
+     where id = r.id;
+  end loop;
+end;
+$$;
+
+-- o job roda sem usuário logado (auth.uid() nulo) — por isso o controle de
+-- quem pode FORÇAR um reenvio manual fica na função abaixo, não nesta
+do $$
+begin
+  if exists (select 1 from cron.job where jobname = 'reenviar-webhooks-pendentes') then
+    perform cron.unschedule('reenviar-webhooks-pendentes');
+  end if;
+  perform cron.schedule(
+    'reenviar-webhooks-pendentes',
+    '*/5 * * * *',
+    $job$select public.reenviar_webhooks_pendentes()$job$
+  );
+end
+$$;
+
+/** Botão "Tentar reenviar agora" em Manutenção — só o dev. */
+create or replace function public.forcar_reenvio_webhooks()
+returns void language plpgsql security definer set search_path = public, extensions
+as $$
+begin
+  if not public.e_dev() then
+    raise exception 'Só o dev pode forçar o reenvio.';
+  end if;
+  perform public.reenviar_webhooks_pendentes();
+end;
+$$;
 
 -- ============================================================================
 --  8. SEGURANÇA (RLS)
@@ -913,6 +1051,7 @@ alter table public.vendas              enable row level security;
 alter table public.sorteios            enable row level security;
 alter table public.inscricoes_push     enable row level security;
 alter table public.integracao_webhook  enable row level security;
+alter table public.integracao_webhook_log enable row level security;
 
 -- ---- config ----------------------------------------------------------------
 drop policy if exists "config: só o meu grupo" on public.config;
@@ -1047,6 +1186,13 @@ create policy "integracao_webhook: só a liderança altera"
   using (public.e_lider() and public.posso_ver(grupo))
   with check (public.e_lider() and public.posso_ver(grupo));
 
+-- ---- integracao_webhook_log: histórico de tentativas, só leitura ----------
+--  Escrita é sempre pelas funções SECURITY DEFINER (gatilho + job agendado).
+drop policy if exists "integracao_webhook_log: liderança do grupo" on public.integracao_webhook_log;
+create policy "integracao_webhook_log: liderança do grupo"
+  on public.integracao_webhook_log for select to authenticated
+  using (public.e_lider() and public.posso_ver(grupo));
+
 -- ============================================================================
 --  9. PERMISSÕES DE TABELA
 -- ----------------------------------------------------------------------------
@@ -1058,13 +1204,14 @@ grant usage on schema public to anon, authenticated;
 
 revoke all on public.config, public.codigos_acesso, public.perfis, public.vendedores,
               public.vendedores_privado, public.vendas, public.sorteios, public.inscricoes_push,
-              public.integracao_webhook
+              public.integracao_webhook, public.integracao_webhook_log
   from anon, authenticated;
 
 grant select on public.config, public.vendedores, public.vendas, public.sorteios, public.perfis
   to authenticated;
 grant select, insert, delete on public.inscricoes_push to authenticated;
 grant select, update on public.integracao_webhook to authenticated;
+grant select on public.integracao_webhook_log to authenticated;
 
 grant update                 on public.config             to authenticated;
 grant insert, update, delete on public.vendedores         to authenticated;
@@ -1084,6 +1231,7 @@ revoke all on function public.assinar_termo(text, text) from public, anon;
 revoke all on function public.fechar_meta_do_vendedor(uuid, text)                   from public, anon;
 revoke all on function public.transferir_vendas(uuid, uuid)                         from public, anon;
 revoke all on function public.apagar_dados_do_grupo(text)                           from public, anon;
+revoke all on function public.forcar_reenvio_webhooks()                             from public, anon;
 
 grant execute on function public.registrar_lider(text, text, text)                     to authenticated;
 grant execute on function public.vincular_vendedor()                                   to authenticated;
@@ -1095,6 +1243,7 @@ grant execute on function public.assinar_termo(text, text) to authenticated;
 grant execute on function public.fechar_meta_do_vendedor(uuid, text)                   to authenticated;
 grant execute on function public.transferir_vendas(uuid, uuid)                         to authenticated;
 grant execute on function public.apagar_dados_do_grupo(text)                           to authenticated;
+grant execute on function public.forcar_reenvio_webhooks()                             to authenticated;
 grant execute on function public.meu_papel(), public.meu_grupo(), public.e_dev(),
                           public.e_lider(), public.meu_vendedor_id(),
                           public.posso_ver(text), public.codigo_definido(text),

@@ -156,9 +156,9 @@ select table_name from information_schema.tables
 where table_schema = 'public' order by table_name;
 ```
 
-Devem aparecer nove: `codigos_acesso`, `config`, `integracao_webhook`,
-`inscricoes_push`, `perfis`, `sorteios`, `vendas`, `vendedores`,
-`vendedores_privado`.
+Devem aparecer dez: `codigos_acesso`, `config`, `integracao_webhook`,
+`integracao_webhook_log`, `inscricoes_push`, `perfis`, `sorteios`, `vendas`,
+`vendedores`, `vendedores_privado`.
 
 ### 4. Criar o seu acesso de dev e os códigos dos grupos
 
@@ -225,6 +225,7 @@ seguir). Resumo das tabelas:
 | `vendedores_privado` | observações e termo assinado — líder vê, vendedor não vê nem o próprio |
 | `vendas` | cada rifa vendida, com `status` (pago/pendente) e `repasse` (pendente/entregue/confirmado) |
 | `integracao_webhook` | URL e segredo do aviso automático pro outro sistema — ver [Integração por webhook](#integração-por-webhook) |
+| `integracao_webhook_log` | histórico de cada tentativa de aviso, pra permitir reenvio automático |
 | `inscricoes_push` | assinatura de notificação push por vendedor |
 | `sorteios` | histórico de sorteios |
 
@@ -466,6 +467,20 @@ integração nasce desligada. Dá pra configurar de dois jeitos:
          segredo = 'uma-palavra-combinada-com-o-outro-sistema'
    where grupo = 'Alpha'; -- repete trocando pra 'Kombo'
   ```
+
+**Reenvio automático:** o `net.http_post` é assíncrono e não tenta de novo
+sozinho se falhar (link errado, outro sistema fora do ar, timeout). Por
+isso cada envio fica registrado em `integracao_webhook_log`
+(`pendente` / `sucesso` / `falhou`), e um job agendado
+(`reenviar_webhooks_pendentes`, via `pg_cron`, a cada 5 minutos) confere o
+que não teve resposta de sucesso e tenta de novo — até 6 tentativas (±30
+min) antes de marcar como `falhou` de vez. Sem isso, uma falha de rede
+faria perder o aviso de um vendedor em silêncio, sem ninguém notar.
+
+Dá pra acompanhar em **Manutenção → "Avisos do webhook"** (só dev): mostra
+o histórico recente, quantos estão pendentes ou falharam, e tem um botão
+**"Tentar reenviar agora"** que roda o job na hora em vez de esperar os 5
+minutos (chama `forcar_reenvio_webhooks()`, que só funciona pro papel dev).
 
 ### Notificações push
 
