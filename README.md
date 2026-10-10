@@ -497,6 +497,29 @@ estático em `public/`. O Android oferece instalação nativa quando o
 navegador dispara o evento; sem o evento (ou no iPhone, que não tem esse
 evento), cai no guia manual.
 
+### Atualização automática depois de um deploy
+
+Quem já está com o app aberto quando você publica uma versão nova (`git
+push` → EasyPanel) não vê a mudança sozinho por padrão — é o comportamento
+normal de qualquer site. `src/utils/atualizacoes.js` resolve isso: a cada 1
+minuto (e sempre que o app volta a ficar em primeiro plano), busca o
+`index.html` de novo sem cache e compara o nome do arquivo `.js` principal
+(o Vite grava um hash nele a cada build) com o que está rodando. Se mudou,
+é porque saiu uma versão nova — e o app **recarrega sozinho**, sem avisar
+nem perguntar.
+
+> Por decisão explícita (em vez do padrão mais cauteloso de avisar e deixar
+> a pessoa escolher quando atualizar): se alguém estiver no meio de
+> preencher um formulário bem no instante em que isso dispara, o que não
+> foi salvo se perde. Pra mudar esse comportamento — ex: avisar com um
+> botão "Atualizar" em vez de recarregar sozinho — é só trocar o
+> `window.location.reload()` dentro de `observarNovaVersao()` por uma
+> notificação na tela.
+
+Os dados (vendas, vendedores, configurações) são outra história — esses já
+chegam em tempo real em todos os dispositivos via Supabase Realtime, sem
+precisar de nada disso.
+
 ### Mensagem pronta no WhatsApp
 
 `utils/whatsapp.js` monta o texto (venda, termo, acesso ao app); o app nunca
