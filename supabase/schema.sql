@@ -940,6 +940,7 @@ declare
   r              record;
   v_status_code  integer;
   v_error_msg    text;
+  v_conteudo     text;
   v_tem_resposta boolean;
   v_url          text;
   v_segredo      text;
@@ -954,10 +955,11 @@ begin
   loop
     v_status_code  := null;
     v_error_msg    := null;
+    v_conteudo     := null;
     v_tem_resposta := false;
 
     if r.request_id is not null then
-      select status_code, error_msg into v_status_code, v_error_msg
+      select status_code, error_msg, left(content, 500) into v_status_code, v_error_msg, v_conteudo
         from net._http_response where id = r.request_id;
       v_tem_resposta := found;
     end if;
@@ -969,10 +971,27 @@ begin
       continue;
     end if;
 
+    -- 400/401 são erro permanente do nosso lado (dado errado ou segredo
+    -- errado) — reenviar não resolve, só desperdiça tentativa. Falha na
+    -- hora pra aparecer em Manutenção o quanto antes, em vez de esperar
+    -- até esgotar as 6 tentativas.
+    if v_tem_resposta and v_status_code in (400, 401) then
+      update public.integracao_webhook_log
+         set status = 'falhou',
+             ultimo_erro = case
+               when v_status_code = 400
+                 then coalesce('Dado em formato errado (400): ' || v_conteudo, 'Dado em formato errado (400).')
+               else 'Segredo incorreto (401) — confira em Configurações.'
+             end,
+             atualizado_em = now()
+       where id = r.id;
+      continue;
+    end if;
+
     if r.tentativas >= v_limite then
       update public.integracao_webhook_log
          set status = 'falhou',
-             ultimo_erro = coalesce(v_error_msg, 'sem resposta do outro sistema'),
+             ultimo_erro = coalesce(v_conteudo, v_error_msg, 'sem resposta do outro sistema'),
              atualizado_em = now()
        where id = r.id;
       continue;
@@ -1000,7 +1019,7 @@ begin
     update public.integracao_webhook_log
        set request_id  = v_novo_id,
            tentativas  = tentativas + 1,
-           ultimo_erro = v_error_msg,
+           ultimo_erro = coalesce(v_conteudo, v_error_msg),
            atualizado_em = now()
      where id = r.id;
   end loop;
