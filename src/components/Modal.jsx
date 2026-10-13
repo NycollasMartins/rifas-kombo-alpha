@@ -4,10 +4,13 @@ import estilos from './Modal.module.css'
 /**
  * Janela que sobe de baixo no celular e aparece centralizada no computador.
  *
- * Por padrão fecha ao tocar no fundo escuro ou ao apertar Esc — o esperado
- * para formulários. Com `soFechaNoX`, ela ignora as duas saídas e passa a
- * mostrar um × no cabeçalho: serve para conteúdo que a pessoa precisa
- * terminar de ler, e que um toque fora fecharia sem querer.
+ * Por padrão fecha ao tocar no fundo escuro ou ao apertar Esc. Com
+ * `soFechaNoX`, ela ignora as duas saídas e passa a mostrar um × no
+ * cabeçalho — usado tanto pra conteúdo que a pessoa precisa terminar de ler,
+ * quanto pra qualquer formulário com upload de arquivo: no celular, voltar
+ * do seletor nativo de foto às vezes dispara um "toque fantasma" bem no
+ * fundo da tela, e sem `soFechaNoX` isso fechava o formulário sozinho antes
+ * de salvar (mesmo com a trava do `comecouNoFundo` abaixo).
  */
 export default function Modal({ titulo, aoFechar, children, rodape, soFechaNoX }) {
   // O toque precisa COMEÇAR no fundo, não só terminar lá — ao escolher uma

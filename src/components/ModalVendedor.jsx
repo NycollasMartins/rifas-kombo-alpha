@@ -170,6 +170,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
     <Modal
       titulo={editando ? 'Editar vendedor' : `Novo vendedor do ${infoDoGrupo(grupo).nome}`}
       aoFechar={aoFechar}
+      soFechaNoX={editando}
       rodape={
         <>
           <button className="btn" onClick={aoFechar} disabled={salvando}>

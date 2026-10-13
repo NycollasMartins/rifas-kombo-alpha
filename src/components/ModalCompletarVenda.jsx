@@ -58,6 +58,7 @@ export default function ModalCompletarVenda({ lote, precoRifa, grupo, aoFechar }
     <Modal
       titulo="Completar venda"
       aoFechar={aoFechar}
+      soFechaNoX
       rodape={
         <>
           <button className="btn" onClick={aoFechar} disabled={Boolean(etapa)}>

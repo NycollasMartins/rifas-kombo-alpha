@@ -146,6 +146,7 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
     <Modal
       titulo="Registrar venda"
       aoFechar={aoFechar}
+      soFechaNoX
       rodape={
         <>
           <button className="btn" onClick={aoFechar} disabled={Boolean(etapa)}>
