@@ -12,7 +12,6 @@ import { useSessao } from '../hooks/useSessao'
 import { precoDoVendedor, resumoDoVendedor, vendasDoVendedor } from '../utils/calculos'
 import { agruparPorLote } from '../lib/db/vendas'
 import { formatarMoeda } from '../utils/formato'
-import { diasAte, formatarPrazo, prazoEncerrado } from '../utils/prazo'
 import { infoDoGrupo } from '../utils/grupos'
 import estilos from './TelaVendedor.module.css'
 
@@ -43,7 +42,6 @@ export default function TelaVendedor() {
   }
 
   const resumo = resumoDoVendedor(meuCadastro, vendas, config)
-  const encerrado = prazoEncerrado(config.prazoFinal)
   const saiu = meuCadastro.situacao === 'desistiu'
 
   return (
@@ -91,16 +89,9 @@ export default function TelaVendedor() {
         />
       </div>
 
-      {!saiu && diasAte(config.primeiroAcerto) !== null && diasAte(config.primeiroAcerto) >= 0 && (
-        <div className={estilos.avisoPrazo}>
-          <strong>Primeiro acerto: {formatarPrazo(config.primeiroAcerto)}</strong>
-          <span>Separe o que já arrecadou para acertar as contas com a liderança.</span>
-        </div>
-      )}
-
       {!saiu && (
         <AvisoDePrazo
-          prazoFinal={config.prazoFinal}
+          prazoFinal={config.prazoVendedor}
           faltante={resumo.faltante}
           precoRifa={precoDoVendedor(meuCadastro, config)}
           identificador={meuCadastro.id}

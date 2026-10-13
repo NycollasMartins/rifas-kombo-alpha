@@ -11,7 +11,7 @@ export const CONFIG_PADRAO = {
   prazoFinal: '',
   premio: '',
   dataSorteio: '',
-  primeiroAcerto: '',
+  prazoVendedor: '',
 }
 
 export function mapearConfig(linha) {
@@ -25,7 +25,7 @@ export function mapearConfig(linha) {
     prazoFinal: linha.prazo_final || '',
     premio: linha.premio || '',
     dataSorteio: linha.data_sorteio || '',
-    primeiroAcerto: linha.primeiro_acerto || '',
+    prazoVendedor: linha.prazo_vendedor || '',
   }
 }
 
@@ -54,7 +54,7 @@ export async function salvarConfig(grupo, mudancas) {
   if (mudancas.prazoFinal !== undefined) linha.prazo_final = mudancas.prazoFinal || null
   if (mudancas.premio !== undefined) linha.premio = mudancas.premio || null
   if (mudancas.dataSorteio !== undefined) linha.data_sorteio = mudancas.dataSorteio || null
-  if (mudancas.primeiroAcerto !== undefined) linha.primeiro_acerto = mudancas.primeiroAcerto || null
+  if (mudancas.prazoVendedor !== undefined) linha.prazo_vendedor = mudancas.prazoVendedor || null
 
   const salva = verificar(
     await supabase.from('config').update(linha).eq('grupo', grupo).select().single(),

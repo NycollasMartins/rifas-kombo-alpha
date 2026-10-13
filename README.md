@@ -408,6 +408,25 @@ campo (`tipo = 'adolescente' | 'voluntario'` no banco), rótulo diferente.
 Resolvido em `utils/grupos.js` (`rotuloDoTipo` / `rotuloDoTipoPlural`), nunca
 hardcoded num componente.
 
+### Dois prazos: o que o vendedor vê x o prazo real
+
+`config` guarda dois campos de data separados, de propósito:
+
+- `prazo_vendedor` — a **única** data de prazo que o vendedor enxerga: na
+  tela dele (`AvisoDePrazo`, com a contagem regressiva de 7 dias/3 dias/24
+  horas) e no texto do termo de compromisso que ele assina
+  (`montarMensagemDoTermo`). Editável em Configurações → "Prazo — o que o
+  vendedor vê".
+- `prazo_final` — o prazo **real**, usado só no painel da liderança
+  (`AbaPainel.jsx`) pra saber quando cobrar quem está devendo. Nunca é lido
+  em nenhuma tela ou mensagem que o vendedor acessa.
+
+A ideia é deixar `prazo_vendedor` antes do `prazo_final` de verdade, pra
+manter o senso de urgência — vendedor que sabe que tem "mais um prazo depois
+desse" relaxa e empurra a venda pra depois. Se for adicionar uma tela nova
+que mostra prazo pro vendedor, usa `config.prazoVendedor`, nunca
+`config.prazoFinal` diretamente.
+
 ### Redefinir senha sem e-mail
 
 Botão "Redefinir senha" em `ModalVendedor.jsx` (editando um vendedor que já

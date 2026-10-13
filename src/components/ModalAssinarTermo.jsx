@@ -21,7 +21,7 @@ export default function ModalAssinarTermo({ vendedor, grupo, aoFechar }) {
     grupo,
     precoRifa: precoDoVendedor(vendedor, config),
     meta: metaDoVendedor(vendedor, config),
-    prazoFinal: config.prazoFinal,
+    prazoFinal: config.prazoVendedor,
   })
 
   async function assinar() {

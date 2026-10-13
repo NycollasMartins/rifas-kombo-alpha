@@ -33,7 +33,7 @@ export default function AbaConfiguracoes() {
   const [prazoFinal, setPrazoFinal] = useState(config.prazoFinal || '')
   const [premio, setPremio] = useState(config.premio || '')
   const [dataSorteio, setDataSorteio] = useState(config.dataSorteio || '')
-  const [primeiroAcerto, setPrimeiroAcerto] = useState(config.primeiroAcerto || '')
+  const [prazoVendedor, setPrazoVendedor] = useState(config.prazoVendedor || '')
   const [codigo, setCodigo] = useState('')
   const [codigoVendedor, setCodigoVendedor] = useState('')
   const [novaSenha, setNovaSenha] = useState('')
@@ -203,48 +203,53 @@ export default function AbaConfiguracoes() {
       </div>
 
       <div className="card">
-        <h2>Primeiro acerto</h2>
+        <h2>Prazo — o que o vendedor vê</h2>
         <p className="texto-ajuda">
-          A data do primeiro encontro para acertar as contas com os vendedores. Some do vendedor
-          quando o dia passa.
+          Pro vendedor, essa é a <strong>única</strong> data de prazo que existe — aparece na tela
+          dele com os avisos de contagem regressiva (7 dias, 3 dias, 24 horas...) e também no termo
+          de compromisso que ele assina. Pode ser antes do prazo final de verdade (próximo card),
+          de propósito: mantém o senso de urgência e evita que ele relaxe achando que ainda falta
+          muito tempo.
         </p>
         <div className="field">
-          <label htmlFor="cfg-acerto">Data do primeiro acerto</label>
+          <label htmlFor="cfg-prazo-vendedor">Data que o vendedor vê</label>
           <input
-            id="cfg-acerto"
+            id="cfg-prazo-vendedor"
             type="date"
-            value={primeiroAcerto}
-            onChange={(e) => setPrimeiroAcerto(e.target.value)}
+            value={prazoVendedor}
+            onChange={(e) => setPrazoVendedor(e.target.value)}
           />
         </div>
-        <Recado cartao="acerto" />
+        <Recado cartao="prazoVendedor" />
         <button
           className="btn btn-primary"
           onClick={() =>
-            tentar('acerto', async () => {
-              await salvarAjustes({ primeiroAcerto })
-              if (primeiroAcerto) {
+            tentar('prazoVendedor', async () => {
+              await salvarAjustes({ prazoVendedor })
+              if (prazoVendedor) {
                 notificarVendedores(
                   grupo,
-                  'Primeiro acerto marcado',
-                  `O primeiro acerto do ${nomeDoGrupo} é dia ${formatarPrazo(primeiroAcerto)}.`
+                  'Prazo final marcado',
+                  `O prazo final de vendas do ${nomeDoGrupo} é dia ${formatarPrazo(prazoVendedor)}.`
                 )
               }
-            }, primeiroAcerto ? 'Salvo.' : 'Removido.')
+            }, prazoVendedor ? 'Salvo.' : 'Removido.')
           }
         >
-          Salvar primeiro acerto
+          Salvar
         </button>
       </div>
 
       <div className="card">
-        <h2>Prazo final das vendas</h2>
+        <h2>Prazo final de verdade — só a liderança vê</h2>
         <p className="texto-ajuda">
-          Depois desta data, quem não bateu a meta precisa comprar as rifas que faltam, conforme o
-          termo de compromisso. Deixe em branco se não quiser prazo.
+          O prazo real, definitivo. Depois dessa data, quem não bateu a meta precisa comprar as
+          rifas que faltam, conforme o termo de compromisso. <strong>O vendedor nunca vê essa
+          data</strong> — nem na tela dele, nem no termo, nem em notificação. Deixe em branco se
+          não quiser prazo.
         </p>
         <div className="field">
-          <label htmlFor="cfg-prazo">Data limite</label>
+          <label htmlFor="cfg-prazo">Data limite de verdade</label>
           <input
             id="cfg-prazo"
             type="date"
@@ -255,20 +260,9 @@ export default function AbaConfiguracoes() {
         <Recado cartao="prazo" />
         <button
           className="btn btn-primary"
-          onClick={() =>
-            tentar('prazo', async () => {
-              await salvarAjustes({ prazoFinal })
-              if (prazoFinal) {
-                notificarVendedores(
-                  grupo,
-                  'Prazo final marcado',
-                  `O prazo final de vendas do ${nomeDoGrupo} é dia ${formatarPrazo(prazoFinal)}.`
-                )
-              }
-            }, prazoFinal ? 'Prazo salvo.' : 'Prazo removido.')
-          }
+          onClick={() => tentar('prazo', () => salvarAjustes({ prazoFinal }), prazoFinal ? 'Prazo salvo.' : 'Prazo removido.')}
         >
-          Salvar prazo
+          Salvar
         </button>
       </div>
 

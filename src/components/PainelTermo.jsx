@@ -108,7 +108,7 @@ export default function PainelTermo({ vendedor }) {
               grupo: vendedor.grupo,
               precoRifa: precoDoVendedor(vendedor, config),
               meta: metaDoVendedor(vendedor, config),
-              prazoFinal: config.prazoFinal,
+              prazoFinal: config.prazoVendedor,
             })}
             compacto
           />

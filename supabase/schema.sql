@@ -123,7 +123,7 @@ create table if not exists public.config (
   prazo_final date,
   premio      text,
   data_sorteio     date,
-  primeiro_acerto  date,
+  prazo_vendedor   date,
   updated_at  timestamptz not null default now()
 );
 
@@ -131,7 +131,23 @@ insert into public.config (grupo) values ('Alpha'), ('Kombo') on conflict (grupo
 
 alter table public.config add column if not exists premio text;
 alter table public.config add column if not exists data_sorteio date;
-alter table public.config add column if not exists primeiro_acerto date;
+
+-- "primeiro_acerto" virou "prazo_vendedor": em vez de um aviso informativo à
+-- parte, agora é o ÚNICO prazo que o vendedor enxerga (pode ser antes do
+-- prazo_final de verdade, de propósito, pra manter o senso de urgência —
+-- só a liderança vê os dois, em Configurações).
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'config' and column_name = 'primeiro_acerto')
+     and not exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'config' and column_name = 'prazo_vendedor')
+  then
+    alter table public.config rename column primeiro_acerto to prazo_vendedor;
+  end if;
+end
+$$;
+alter table public.config add column if not exists prazo_vendedor date;
 -- preço/meta específicos de quem vende para ficar no chalé (só usado no Kombo)
 alter table public.config add column if not exists preco_rifa_chale numeric(10, 2) not null default 10;
 alter table public.config add column if not exists meta_chale numeric(10, 2) not null default 500;

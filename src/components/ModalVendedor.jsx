@@ -155,7 +155,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
             grupo,
             precoRifa: precoDoVendedor(vendedorCriado, config),
             meta: metaDoVendedor(vendedorCriado, config),
-            prazoFinal: config.prazoFinal,
+            prazoFinal: config.prazoVendedor,
           })}
         />
 
