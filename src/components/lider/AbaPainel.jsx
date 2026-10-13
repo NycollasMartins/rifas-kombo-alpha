@@ -51,14 +51,24 @@ export default function AbaPainel() {
   )
 
   const encerrado = prazoEncerrado(config.prazoFinal)
+  const encerradoParaVendedor = prazoEncerrado(config.prazoVendedor)
   const semComprovante = vendas.filter((v) => v.pagamento === 'pix' && !v.comprovantePath).length
 
   return (
     <>
+      {config.prazoVendedor && (
+        <div className={`${estilos.prazo} ${encerradoParaVendedor ? estilos.prazoVencido : ''}`}>
+          <strong>{recadoDoPrazo(config.prazoVendedor)}</strong>
+          <span>
+            É o que o vendedor vê — {formatarPrazo(config.prazoVendedor)}
+          </span>
+        </div>
+      )}
+
       {config.prazoFinal && (
         <div className={`${estilos.prazo} ${encerrado ? estilos.prazoVencido : ''}`}>
           <strong>{recadoDoPrazo(config.prazoFinal)}</strong>
-          <span>Prazo: {formatarPrazo(config.prazoFinal)}</span>
+          <span>Prazo real, só a liderança vê — {formatarPrazo(config.prazoFinal)}</span>
         </div>
       )}
 
