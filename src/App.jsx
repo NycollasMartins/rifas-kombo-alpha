@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import TelaEntrada from './components/TelaEntrada'
 import TelaLider from './components/TelaLider'
 import TelaVendedorEntrada from './components/TelaVendedorEntrada'
@@ -18,11 +17,19 @@ import { useDadosRifa } from './hooks/useDadosRifa'
  * líder cai no painel de líder do mesmo jeito.
  */
 export default function App() {
-  const { temAcesso, papel, eLider, eVendedor, estaLogado, verificando, recuperandoSenha } =
-    useSessao()
+  const {
+    temAcesso,
+    papel,
+    eLider,
+    eVendedor,
+    estaLogado,
+    verificando,
+    processando,
+    recuperandoSenha,
+    papelDesejado,
+    escolherPorta,
+  } = useSessao()
   const { carregando, erroCarregamento, recarregar } = useDadosRifa()
-
-  const [porta, setPorta] = useState('entrada') // entrada | lider | vendedor
 
   // O convite de instalação acompanha qualquer tela, inclusive a de entrada —
   // é onde a maioria chega pela primeira vez.
@@ -40,8 +47,13 @@ export default function App() {
 
   if (verificando) return <div className="loading-wrap">Carregando…</div>
 
-  // Entrou, mas a conta ainda não está ligada a nenhum cadastro.
-  if (estaLogado && !temAcesso && papel === 'sem_acesso') return <TelaSemAcesso />
+  // Entrou, mas a conta ainda não está ligada a nenhum cadastro. Enquanto um
+  // cadastro/vínculo estiver em andamento, mostra "Carregando…" em vez de
+  // "sem acesso" — senão a tela pisca errado antes do processo terminar.
+  if (estaLogado && !temAcesso && papel === 'sem_acesso') {
+    if (processando) return <div className="loading-wrap">Carregando…</div>
+    return <TelaSemAcesso />
+  }
 
   if (temAcesso) {
     if (carregando) return <div className="loading-wrap">Carregando…</div>
@@ -62,13 +74,14 @@ export default function App() {
     if (eVendedor) return <TelaVendedor />
   }
 
-  if (porta === 'lider') return <TelaLider aoVoltar={() => setPorta('entrada')} />
-  if (porta === 'vendedor') return <TelaVendedorEntrada aoVoltar={() => setPorta('entrada')} />
+  if (papelDesejado === 'lider') return <TelaLider aoVoltar={() => escolherPorta(null)} />
+  if (papelDesejado === 'vendedor')
+    return <TelaVendedorEntrada aoVoltar={() => escolherPorta(null)} />
 
   return (
     <TelaEntrada
-      aoEscolherVendedor={() => setPorta('vendedor')}
-      aoEscolherLider={() => setPorta('lider')}
+      aoEscolherVendedor={() => escolherPorta('vendedor')}
+      aoEscolherLider={() => escolherPorta('lider')}
     />
   )
   }

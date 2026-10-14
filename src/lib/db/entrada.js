@@ -12,26 +12,26 @@ import { traduzirErro } from './erros'
  * e quem casa o e-mail é o banco.
  */
 
-export async function meuPapel() {
-  const { data, error } = await supabase.rpc('meu_papel')
+export async function meuPapel(papelDesejado) {
+  const { data, error } = await supabase.rpc('meu_papel', { p_papel_desejado: papelDesejado || null })
   if (error) throw new Error(traduzirErro(error, 'Não foi possível verificar o seu acesso.'))
   return data || 'sem_acesso'
 }
 
-export async function meuGrupo() {
-  const { data, error } = await supabase.rpc('meu_grupo')
+export async function meuGrupo(papelDesejado) {
+  const { data, error } = await supabase.rpc('meu_grupo', { p_papel_desejado: papelDesejado || null })
   if (error) return null
   return data || null
 }
 
-export async function meuVendedorId() {
-  const { data, error } = await supabase.rpc('meu_vendedor_id')
+export async function meuVendedorId(papelDesejado) {
+  const { data, error } = await supabase.rpc('meu_vendedor_id', { p_papel_desejado: papelDesejado || null })
   if (error) return null
   return data || null
 }
 
-export async function podeCorrigirVenda() {
-  const { data, error } = await supabase.rpc('pode_corrigir_venda')
+export async function podeCorrigirVenda(papelDesejado) {
+  const { data, error } = await supabase.rpc('pode_corrigir_venda', { p_papel_desejado: papelDesejado || null })
   if (error) return false
   return Boolean(data)
 }

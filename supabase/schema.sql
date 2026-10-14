@@ -217,6 +217,45 @@ create table if not exists public.perfis (
 
 alter table public.perfis add column if not exists pode_corrigir_venda boolean not null default false;
 
+-- Login único com dois papéis (líder E vendedor, mesma conta): "id" deixa de
+-- ser obrigatoriamente igual ao auth.users.id e vira uma chave própria;
+-- "usuario_id" é quem aponta pra conta de login. Isso permite duas linhas
+-- (uma líder, uma vendedor) para a mesma pessoa. Ver meu_papel() etc. logo
+-- abaixo — são elas que escolhem qual das duas linhas vale em cada chamada.
+alter table public.perfis add column if not exists usuario_id uuid;
+update public.perfis set usuario_id = id where usuario_id is null;
+alter table public.perfis alter column usuario_id set not null;
+
+do $$
+begin
+  if exists (select 1 from information_schema.table_constraints
+             where table_schema = 'public' and table_name = 'perfis'
+               and constraint_name = 'perfis_id_fkey') then
+    alter table public.perfis drop constraint perfis_id_fkey;
+  end if;
+end
+$$;
+alter table public.perfis alter column id set default gen_random_uuid();
+
+do $$
+begin
+  if not exists (select 1 from information_schema.table_constraints
+                 where table_schema = 'public' and table_name = 'perfis'
+                   and constraint_name = 'perfis_usuario_id_fkey') then
+    alter table public.perfis add constraint perfis_usuario_id_fkey
+      foreign key (usuario_id) references auth.users (id) on delete cascade;
+  end if;
+  if not exists (select 1 from information_schema.table_constraints
+                 where table_schema = 'public' and table_name = 'perfis'
+                   and constraint_name = 'perfis_usuario_papel_unico') then
+    alter table public.perfis add constraint perfis_usuario_papel_unico
+      unique (usuario_id, papel);
+  end if;
+end
+$$;
+
+create index if not exists perfis_usuario_idx on public.perfis (usuario_id);
+
 -- ---- vendedores_privado: o que NÃO pode circular ---------------------------
 create table if not exists public.vendedores_privado (
   vendedor_id       uuid primary key references public.vendedores (id) on delete cascade,
@@ -301,37 +340,83 @@ insert into public.integracao_webhook (grupo) values ('Alpha'), ('Kombo') on con
 -- ----------------------------------------------------------------------------
 --  SECURITY DEFINER porque estas funções são chamadas de dentro das políticas
 --  de RLS da própria tabela perfis — sem isso o Postgres entra em recursão.
+--
+--  Cada uma aceita um "p_papel_desejado" opcional ('lider' ou 'vendedor'):
+--  com login único pra líder e vendedor, pode existir mais de uma linha de
+--  perfil pra mesma conta, e esse parâmetro diz qual delas vale pra esta
+--  chamada. Sem ele (como toda política de RLS já chama hoje, sem
+--  argumento), prefere a linha de líder/dev — mantém o comportamento de
+--  sempre pra quem só tem um papel.
 -- ============================================================================
 
-create or replace function public.meu_papel()
+-- assinaturas antigas (sem o parâmetro) ficam como overload morto se não
+-- remover — mesmo cuidado já tomado antes com registrar_vendedor_autonomo
+drop function if exists public.meu_papel();
+drop function if exists public.meu_grupo();
+drop function if exists public.e_dev();
+drop function if exists public.e_lider();
+drop function if exists public.meu_vendedor_id();
+drop function if exists public.pode_corrigir_venda();
+
+create or replace function public.meu_papel(p_papel_desejado text default null)
 returns text language sql stable security definer set search_path = public as $$
-  select coalesce((select papel from public.perfis where id = auth.uid()), 'sem_acesso')
+  select coalesce(
+    (select papel from public.perfis
+      where usuario_id = auth.uid()
+        and (p_papel_desejado is null
+             or (p_papel_desejado = 'lider' and papel in ('dev', 'lider'))
+             or (p_papel_desejado = 'vendedor' and papel = 'vendedor'))
+      order by case papel when 'dev' then 0 when 'lider' then 1 else 2 end
+      limit 1),
+    'sem_acesso'
+  )
 $$;
 
-create or replace function public.meu_grupo()
+create or replace function public.meu_grupo(p_papel_desejado text default null)
 returns text language sql stable security definer set search_path = public as $$
-  select grupo from public.perfis where id = auth.uid()
+  select grupo from public.perfis
+    where usuario_id = auth.uid()
+      and (p_papel_desejado is null
+           or (p_papel_desejado = 'lider' and papel in ('dev', 'lider'))
+           or (p_papel_desejado = 'vendedor' and papel = 'vendedor'))
+    order by case papel when 'dev' then 0 when 'lider' then 1 else 2 end
+    limit 1
 $$;
 
-create or replace function public.e_dev()
+create or replace function public.e_dev(p_papel_desejado text default null)
 returns boolean language sql stable security definer set search_path = public as $$
-  select coalesce((select papel = 'dev' from public.perfis where id = auth.uid()), false)
+  select public.meu_papel(p_papel_desejado) = 'dev'
 $$;
 
-create or replace function public.e_lider()
+create or replace function public.e_lider(p_papel_desejado text default null)
 returns boolean language sql stable security definer set search_path = public as $$
-  select coalesce((select papel in ('dev', 'lider') from public.perfis where id = auth.uid()), false)
+  select public.meu_papel(p_papel_desejado) in ('dev', 'lider')
 $$;
 
-create or replace function public.meu_vendedor_id()
+create or replace function public.meu_vendedor_id(p_papel_desejado text default null)
 returns uuid language sql stable security definer set search_path = public as $$
-  select vendedor_id from public.perfis where id = auth.uid()
+  select vendedor_id from public.perfis
+    where usuario_id = auth.uid()
+      and (p_papel_desejado is null
+           or (p_papel_desejado = 'lider' and papel in ('dev', 'lider'))
+           or (p_papel_desejado = 'vendedor' and papel = 'vendedor'))
+    order by case papel when 'dev' then 0 when 'lider' then 1 else 2 end
+    limit 1
 $$;
 
 /** Dev sempre pode; líder só se o dev liberou (Usuários -> Corrigir venda). */
-create or replace function public.pode_corrigir_venda()
+create or replace function public.pode_corrigir_venda(p_papel_desejado text default null)
 returns boolean language sql stable security definer set search_path = public as $$
-  select public.e_dev() or coalesce((select pode_corrigir_venda from public.perfis where id = auth.uid()), false)
+  select public.e_dev(p_papel_desejado) or coalesce(
+    (select pode_corrigir_venda from public.perfis
+      where usuario_id = auth.uid()
+        and (p_papel_desejado is null
+             or (p_papel_desejado = 'lider' and papel in ('dev', 'lider'))
+             or (p_papel_desejado = 'vendedor' and papel = 'vendedor'))
+      order by case papel when 'dev' then 0 when 'lider' then 1 else 2 end
+      limit 1),
+    false
+  )
 $$;
 
 /** O dev enxerga os dois grupos; todo mundo enxerga só o seu. */
@@ -367,9 +452,11 @@ begin
     raise exception 'Escolha Alpha ou Kombo.';
   end if;
 
-  -- já tem acesso? não deixa trocar de papel sozinho
-  if exists (select 1 from public.perfis where id = auth.uid()) then
-    return (select papel from public.perfis where id = auth.uid());
+  -- já é líder/dev? não deixa trocar de grupo nem duplicar — mas ter um
+  -- perfil de VENDEDOR nessa mesma conta não impede virar líder também
+  -- (login único com os dois papéis)
+  if exists (select 1 from public.perfis where usuario_id = auth.uid() and papel in ('dev', 'lider')) then
+    return (select papel from public.perfis where usuario_id = auth.uid() and papel in ('dev', 'lider') limit 1);
   end if;
 
   select codigo_hash into v_hash from public.codigos_acesso where grupo = p_grupo;
@@ -383,7 +470,7 @@ begin
     raise exception 'Código do acampamento incorreto.';
   end if;
 
-  insert into public.perfis (id, nome, papel, grupo)
+  insert into public.perfis (usuario_id, nome, papel, grupo)
   values (auth.uid(), nullif(btrim(coalesce(p_nome, '')), ''), 'lider', p_grupo);
 
   return 'lider';
@@ -407,8 +494,10 @@ begin
     raise exception 'Faça o cadastro de e-mail e senha antes.';
   end if;
 
-  if exists (select 1 from public.perfis where id = auth.uid()) then
-    return (select papel from public.perfis where id = auth.uid());
+  -- já tem perfil de VENDEDOR nessa conta? não deixa linkar de novo — mas
+  -- ser líder nessa mesma conta não impede virar vendedor também
+  if exists (select 1 from public.perfis where usuario_id = auth.uid() and papel = 'vendedor') then
+    return 'vendedor';
   end if;
 
   select lower(email) into v_email from auth.users where id = auth.uid();
@@ -426,7 +515,7 @@ begin
 
   update public.vendedores set user_id = auth.uid() where id = v_vendedor.id;
 
-  insert into public.perfis (id, nome, papel, grupo, vendedor_id)
+  insert into public.perfis (usuario_id, nome, papel, grupo, vendedor_id)
   values (auth.uid(), v_vendedor.nome, 'vendedor', v_vendedor.grupo, v_vendedor.id);
 
   return 'vendedor';
@@ -514,7 +603,9 @@ begin
   if p_grupo not in ('Alpha', 'Kombo') then
     raise exception 'Escolha Alpha ou Kombo.';
   end if;
-  if exists (select 1 from public.perfis where id = auth.uid()) then
+  -- já tem perfil de VENDEDOR nessa conta? não faz nada — mas ser líder
+  -- nessa mesma conta não impede virar vendedor também (login único)
+  if exists (select 1 from public.perfis where usuario_id = auth.uid() and papel = 'vendedor') then
     return;
   end if;
   if length(btrim(coalesce(p_nome, ''))) = 0 then
@@ -554,7 +645,7 @@ begin
     returning * into v_vendedor;
   end if;
 
-  insert into public.perfis (id, nome, papel, grupo, vendedor_id)
+  insert into public.perfis (usuario_id, nome, papel, grupo, vendedor_id)
   values (auth.uid(), btrim(p_nome), 'vendedor', p_grupo, v_vendedor.id);
 end;
 $$;
@@ -1108,7 +1199,7 @@ drop policy if exists "perfis: cada um vê o seu" on public.perfis;
 create policy "perfis: cada um vê o seu"
   on public.perfis for select to authenticated
   using (
-    id = auth.uid()
+    usuario_id = auth.uid()
     or public.e_dev()
     or (public.e_lider() and grupo = public.meu_grupo())
   );
@@ -1279,10 +1370,10 @@ grant execute on function public.fechar_meta_do_vendedor(uuid, text)            
 grant execute on function public.transferir_vendas(uuid, uuid)                         to authenticated;
 grant execute on function public.apagar_dados_do_grupo(text)                           to authenticated;
 grant execute on function public.forcar_reenvio_webhooks()                             to authenticated;
-grant execute on function public.meu_papel(), public.meu_grupo(), public.e_dev(),
-                          public.e_lider(), public.meu_vendedor_id(),
+grant execute on function public.meu_papel(text), public.meu_grupo(text), public.e_dev(text),
+                          public.e_lider(text), public.meu_vendedor_id(text),
                           public.posso_ver(text), public.codigo_definido(text),
-                          public.pode_corrigir_venda()
+                          public.pode_corrigir_venda(text)
   to anon, authenticated;
 
 -- ============================================================================
@@ -1384,9 +1475,9 @@ $$;
 --  2. Crie o seu usuário em Authentication -> Users -> Add user
 --     (marque "Auto Confirm User") e vire dev, trocando o e-mail abaixo:
 --
---     insert into public.perfis (id, nome, papel, grupo)
+--     insert into public.perfis (usuario_id, nome, papel, grupo)
 --     select id, 'Dev', 'dev', null from auth.users where email = 'voce@email.com'
---     on conflict (id) do update set papel = 'dev', grupo = null;
+--     on conflict (usuario_id, papel) do update set grupo = null;
 --
 --  3. Defina os códigos de liderança dos dois grupos (troque as palavras):
 --

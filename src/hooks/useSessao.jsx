@@ -27,6 +27,7 @@ const SessaoContexto = createContext(null)
 
 const SEM_ACESSO = { papel: 'anonimo', grupo: null, vendedorId: null }
 const CHAVE_GRUPO_DO_DEV = 'rifas-grupo-do-dev'
+const CHAVE_PAPEL_DESEJADO = 'rifas-papel-desejado'
 
 /** O dev não pertence a um grupo: ele escolhe qual está olhando no momento. */
 function lerGrupoDoDev() {
@@ -38,12 +39,24 @@ function lerGrupoDoDev() {
   }
 }
 
+/** Por qual porta a pessoa escolheu entrar — líder ou vendedor(a). */
+function lerPapelDesejado() {
+  try {
+    const guardado = localStorage.getItem(CHAVE_PAPEL_DESEJADO)
+    return guardado === 'lider' || guardado === 'vendedor' ? guardado : null
+  } catch {
+    return null
+  }
+}
+
 export function ProvedorSessao({ children }) {
   const [sessao, setSessao] = useState(null)
   const [acesso, setAcesso] = useState(SEM_ACESSO)
   const [verificando, setVerificando] = useState(true)
+  const [processando, setProcessando] = useState(false)
   const [recuperandoSenha, setRecuperandoSenha] = useState(false)
   const [grupoDoDev, setGrupoDoDev] = useState(lerGrupoDoDev)
+  const [papelDesejado, setPapelDesejado] = useState(lerPapelDesejado)
 
   useEffect(() => {
     let ativo = true
@@ -63,17 +76,21 @@ export function ProvedorSessao({ children }) {
     }
   }, [])
 
-  /** Pergunta ao banco quem é essa pessoa. */
+  /**
+   * Pergunta ao banco quem é essa pessoa. Quando a mesma conta tem perfil de
+   * líder e de vendedor(a), `papelDesejado` (a porta por onde ela escolheu
+   * entrar) decide qual dos dois vale agora.
+   */
   const carregarAcesso = useCallback(async () => {
-    const papel = await meuPapel()
+    const papel = await meuPapel(papelDesejado)
     if (papel === 'sem_acesso') return { ...SEM_ACESSO, papel }
     const [grupo, vendedorId, corrigirVenda] = await Promise.all([
-      meuGrupo(),
-      meuVendedorId(),
-      podeCorrigirVenda(),
+      meuGrupo(papelDesejado),
+      meuVendedorId(papelDesejado),
+      podeCorrigirVenda(papelDesejado),
     ])
     return { papel, grupo, vendedorId, podeCorrigirVenda: corrigirVenda }
-  }, [])
+  }, [papelDesejado])
 
   useEffect(() => {
     let ativo = true
@@ -118,7 +135,9 @@ export function ProvedorSessao({ children }) {
       eLider: acesso.papel === 'dev' || acesso.papel === 'lider',
       eVendedor: acesso.papel === 'vendedor',
       verificando,
+      processando,
       recuperandoSenha,
+      papelDesejado,
 
       /** Só o dev troca de grupo; para os outros não faz nada. */
       trocarDeGrupo(novo) {
@@ -126,6 +145,17 @@ export function ProvedorSessao({ children }) {
         setGrupoDoDev(novo)
         try {
           localStorage.setItem(CHAVE_GRUPO_DO_DEV, novo)
+        } catch {
+          // navegador sem armazenamento: vale só nesta sessão
+        }
+      },
+
+      /** Escolhe a porta de entrada: líder ou vendedor(a) (ou volta pra tela inicial). */
+      escolherPorta(novo) {
+        setPapelDesejado(novo)
+        try {
+          if (novo) localStorage.setItem(CHAVE_PAPEL_DESEJADO, novo)
+          else localStorage.removeItem(CHAVE_PAPEL_DESEJADO)
         } catch {
           // navegador sem armazenamento: vale só nesta sessão
         }
@@ -148,35 +178,40 @@ export function ProvedorSessao({ children }) {
        */
       async criarContaDeLider({ nome, email, senha, grupo, codigo, lembrar = true }) {
         definirLembrarLogin(lembrar)
-        const limpo = String(email).trim().toLowerCase()
-        const { error } = await supabase.auth.signUp({
-          email: limpo,
-          password: senha,
-          options: { data: { nome } },
-        })
+        setProcessando(true)
+        try {
+          const limpo = String(email).trim().toLowerCase()
+          const { error } = await supabase.auth.signUp({
+            email: limpo,
+            password: senha,
+            options: { data: { nome } },
+          })
 
-        if (error) {
-          const jaExiste = String(error.message || '').includes('already registered')
-          if (!jaExiste) {
-            return { ok: false, erro: traduzirErro(error, 'Não foi possível criar a conta.') }
-          }
-          const entrada = await supabase.auth.signInWithPassword({ email: limpo, password: senha })
-          if (entrada.error) {
-            return {
-              ok: false,
-              erro: 'Este e-mail já tem conta, e a senha não confere. Use "Já tenho conta".',
+          if (error) {
+            const jaExiste = String(error.message || '').includes('already registered')
+            if (!jaExiste) {
+              return { ok: false, erro: traduzirErro(error, 'Não foi possível criar a conta.') }
+            }
+            const entrada = await supabase.auth.signInWithPassword({ email: limpo, password: senha })
+            if (entrada.error) {
+              return {
+                ok: false,
+                erro: 'Este e-mail já tem conta, e a senha não confere. Use "Já tenho conta".',
+              }
             }
           }
-        }
 
-        try {
-          await registrarLider(grupo, codigo, nome)
-        } catch (e) {
-          return { ok: false, erro: e.message }
-        }
+          try {
+            await registrarLider(grupo, codigo, nome)
+          } catch (e) {
+            return { ok: false, erro: e.message }
+          }
 
-        setAcesso(await carregarAcesso())
-        return { ok: true, erro: '' }
+          setAcesso(await carregarAcesso())
+          return { ok: true, erro: '' }
+        } finally {
+          setProcessando(false)
+        }
       },
 
       /** Autocadastro: a pessoa cria a própria conta E o próprio cadastro de vendedor. */
@@ -192,76 +227,89 @@ export function ProvedorSessao({ children }) {
         lembrar = true,
       }) {
         definirLembrarLogin(lembrar)
-        const limpo = String(email).trim().toLowerCase()
-        const { error } = await supabase.auth.signUp({ email: limpo, password: senha })
+        setProcessando(true)
+        try {
+          const limpo = String(email).trim().toLowerCase()
+          const { error } = await supabase.auth.signUp({ email: limpo, password: senha })
 
-        if (error) {
-          // conta já existe — provável sobra de uma tentativa anterior que
-          // criou o login mas não terminou de vincular (código errado etc).
-          // Em vez de travar, entra com ela e tenta vincular de novo.
-          const jaExiste = String(error.message || '').includes('already registered')
-          if (!jaExiste) {
-            return { ok: false, erro: traduzirErro(error, 'Não foi possível criar a conta.') }
-          }
-          const entrada = await supabase.auth.signInWithPassword({ email: limpo, password: senha })
-          if (entrada.error) {
-            return {
-              ok: false,
-              erro: 'Este e-mail já tem conta, e a senha não confere. Use "Já tenho senha".',
+          if (error) {
+            // conta já existe — provável sobra de uma tentativa anterior que
+            // criou o login mas não terminou de vincular (código errado etc).
+            // Em vez de travar, entra com ela e tenta vincular de novo.
+            const jaExiste = String(error.message || '').includes('already registered')
+            if (!jaExiste) {
+              return { ok: false, erro: traduzirErro(error, 'Não foi possível criar a conta.') }
+            }
+            const entrada = await supabase.auth.signInWithPassword({ email: limpo, password: senha })
+            if (entrada.error) {
+              return {
+                ok: false,
+                erro: 'Este e-mail já tem conta, e a senha não confere. Use "Já tenho senha".',
+              }
             }
           }
+          try {
+            await registrarVendedorAutonomo({
+              grupo,
+              codigo,
+              nome,
+              email: limpo,
+              telefone,
+              tipo,
+              destino,
+            })
+          } catch (e) {
+            // não deixa a pessoa "logada sem acesso": sem isso, a tela trocava
+            // sozinha pra "sua conta ainda não tem acesso" antes dela sequer
+            // ler o erro (ex: código errado), e a tentativa seguinte esbarrava
+            // num cadastro pela metade
+            await supabase.auth.signOut()
+            return { ok: false, erro: e.message }
+          }
+          setAcesso(await carregarAcesso())
+          return { ok: true, erro: '' }
+        } finally {
+          setProcessando(false)
         }
-        try {
-          await registrarVendedorAutonomo({
-            grupo,
-            codigo,
-            nome,
-            email: limpo,
-            telefone,
-            tipo,
-            destino,
-          })
-        } catch (e) {
-          // não deixa a pessoa "logada sem acesso": sem isso, a tela trocava
-          // sozinha pra "sua conta ainda não tem acesso" antes dela sequer
-          // ler o erro (ex: código errado), e a tentativa seguinte esbarrava
-          // num cadastro pela metade
-          await supabase.auth.signOut()
-          return { ok: false, erro: e.message }
-        }
-        setAcesso(await carregarAcesso())
-        return { ok: true, erro: '' }
       },
 
       /** Primeiro acesso do vendedor: ele escolhe a senha dele. */
       async criarSenhaDeVendedor({ email, senha, lembrar = true }) {
         definirLembrarLogin(lembrar)
-        const limpo = String(email).trim().toLowerCase()
-        const { error } = await supabase.auth.signUp({ email: limpo, password: senha })
-
-        if (error) {
-          return { ok: false, erro: traduzirErro(error, 'Não foi possível criar a senha.') }
-        }
-
+        setProcessando(true)
         try {
-          await vincularVendedor()
-        } catch (e) {
-          await supabase.auth.signOut()
-          return { ok: false, erro: e.message }
-        }
+          const limpo = String(email).trim().toLowerCase()
+          const { error } = await supabase.auth.signUp({ email: limpo, password: senha })
 
-        setAcesso(await carregarAcesso())
-        return { ok: true, erro: '' }
+          if (error) {
+            return { ok: false, erro: traduzirErro(error, 'Não foi possível criar a senha.') }
+          }
+
+          try {
+            await vincularVendedor()
+          } catch (e) {
+            await supabase.auth.signOut()
+            return { ok: false, erro: e.message }
+          }
+
+          setAcesso(await carregarAcesso())
+          return { ok: true, erro: '' }
+        } finally {
+          setProcessando(false)
+        }
       },
 
       /** Chamado quando alguém entra mas ainda não tem papel nenhum. */
       async tentarVincular() {
+        setProcessando(true)
         try {
           await vincularVendedor()
           setAcesso(await carregarAcesso())
           return { ok: true, erro: '' }
         } catch (e) {
           return { ok: false, erro: e.message }
+        } finally {
+          setProcessando(false)
         }
       },
 
@@ -299,9 +347,25 @@ export function ProvedorSessao({ children }) {
         await supabase.auth.signOut()
         setAcesso(SEM_ACESSO)
         setRecuperandoSenha(false)
+        setPapelDesejado(null)
+        try {
+          localStorage.removeItem(CHAVE_PAPEL_DESEJADO)
+        } catch {
+          // navegador sem armazenamento: vale só nesta sessão
+        }
       },
     }),
-    [acesso, sessao, verificando, recuperandoSenha, carregarAcesso, eDev, grupoAtivo]
+    [
+      acesso,
+      sessao,
+      verificando,
+      processando,
+      recuperandoSenha,
+      papelDesejado,
+      carregarAcesso,
+      eDev,
+      grupoAtivo,
+    ]
   )
 
   return <SessaoContexto.Provider value={valor}>{children}</SessaoContexto.Provider>
