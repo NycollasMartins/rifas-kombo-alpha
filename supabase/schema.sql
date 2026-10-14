@@ -350,13 +350,16 @@ insert into public.integracao_webhook (grupo) values ('Alpha'), ('Kombo') on con
 -- ============================================================================
 
 -- assinaturas antigas (sem o parâmetro) ficam como overload morto se não
--- remover — mesmo cuidado já tomado antes com registrar_vendedor_autonomo
-drop function if exists public.meu_papel();
-drop function if exists public.meu_grupo();
-drop function if exists public.e_dev();
-drop function if exists public.e_lider();
-drop function if exists public.meu_vendedor_id();
-drop function if exists public.pode_corrigir_venda();
+-- remover — mesmo cuidado já tomado antes com registrar_vendedor_autonomo.
+-- "cascade" porque as políticas de RLS já existentes (de uma execução
+-- anterior deste script) dependem dessas funções; a seção 8, mais abaixo,
+-- recria TODAS as políticas do banco, então nada fica faltando.
+drop function if exists public.meu_papel() cascade;
+drop function if exists public.meu_grupo() cascade;
+drop function if exists public.e_dev() cascade;
+drop function if exists public.e_lider() cascade;
+drop function if exists public.meu_vendedor_id() cascade;
+drop function if exists public.pode_corrigir_venda() cascade;
 
 create or replace function public.meu_papel(p_papel_desejado text default null)
 returns text language sql stable security definer set search_path = public as $$
