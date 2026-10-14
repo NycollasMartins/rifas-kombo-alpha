@@ -165,9 +165,9 @@ Devem aparecer dez: `codigos_acesso`, `config`, `integracao_webhook`,
 ```sql
 -- depois de criar o usuário em Authentication -> Users -> Add user
 -- (marque "Auto Confirm User")
-insert into public.perfis (id, nome, papel, grupo)
+insert into public.perfis (usuario_id, nome, papel, grupo)
 select id, 'Dev', 'dev', null from auth.users where email = 'voce@email.com'
-on conflict (id) do update set papel = 'dev', grupo = null;
+on conflict (usuario_id, papel) do update set grupo = null;
 
 select public.definir_codigo_de_lider('Alpha', 'troque-esta-palavra');
 select public.definir_codigo_de_lider('Kombo', 'troque-esta-tambem');
@@ -221,7 +221,7 @@ seguir). Resumo das tabelas:
 | `config` | preço da rifa, meta padrão, prazo, prêmio — uma linha por grupo. Inclui `preco_rifa_chale`/`meta_chale`, usados só pelo Kombo (ver [chalé x quarto](#preço-por-destino-chalé-x-quarto--só-kombo)) |
 | `codigos_acesso` | hash dos códigos de liderança e de autocadastro — nunca legível, só comparável por função |
 | `vendedores` | cadastro, `situacao` (`ativo` / `quitou` / `desistiu`), `tipo` (`adolescente` / `voluntario`), `destino` (`quarto` / `chale`, só Kombo) |
-| `perfis` | o papel de cada conta logada (`dev` / `lider` / `vendedor`) e o `vendedor_id` quando for vendedor |
+| `perfis` | o papel de cada conta logada (`dev` / `lider` / `vendedor`) e o `vendedor_id` quando for vendedor. Uma conta (`usuario_id`) pode ter **duas linhas** — uma de líder, uma de vendedor — ver [Login único](#login-único-líder-e-vendedor-com-o-mesmo-e-mail) |
 | `vendedores_privado` | observações e termo assinado — líder vê, vendedor não vê nem o próprio |
 | `vendas` | cada rifa vendida, com `status` (pago/pendente) e `repasse` (pendente/entregue/confirmado) |
 | `integracao_webhook` | URL e segredo do aviso automático pro outro sistema — ver [Integração por webhook](#integração-por-webhook) |
@@ -251,6 +251,11 @@ Funções helper (`meu_papel()`, `meu_grupo()`, `e_dev()`, `e_lider()`,
 que precisam de lógica (cadastro, fechamento de meta, etc.) são funções
 `SECURITY DEFINER` chamadas via `.rpc(...)`, nunca `insert`/`update` direto
 numa tabela sensível pelo cliente.
+
+Essas funções helper aceitam um parâmetro opcional `p_papel_desejado` (`'lider'`
+ou `'vendedor'`) — toda policy de RLS continua chamando sem argumento (o
+default cuida disso), só o front-end usa pra desambiguar quando a mesma conta
+tem os dois papéis. Ver [Login único](#login-único-líder-e-vendedor-com-o-mesmo-e-mail).
 
 **Numeração das rifas:** cada grupo tem sequência independente começando em
 `#001`. O número de uma venda nova é sempre o **menor número livre** daquele
@@ -388,6 +393,44 @@ liderança por engano.
 (sobra de uma tentativa anterior que falhou no meio, ex: código errado), ele
 entra com a senha em vez de travar em "e-mail já cadastrado" — mesmo padrão
 usado em `criarContaDeLider`.
+
+**Corrida com a tela "sem acesso":** `registrar_vendedor_autonomo` é
+propositalmente lento (usa bcrypt pra conferir o código), e o `signUp` do
+Supabase dispara `onAuthStateChange` quase na hora — antes desse RPC
+terminar. Sem cuidado, `App.jsx` via a sessão ativa, o papel ainda
+`'sem_acesso'`, e mostrava `TelaSemAcesso` no meio do cadastro (bug real,
+relatado por vendedores do Alpha e do Kombo). Resolvido com um estado
+`processando` em `useSessao.jsx`, ligado antes de cada chamada lenta
+(`cadastrarVendedor`, `criarSenhaDeVendedor`, `criarContaDeLider`,
+`tentarVincular`) e desligado no `finally`; `App.jsx` só mostra
+`TelaSemAcesso` com `!processando`. Qualquer fluxo novo de
+cadastro/vínculo que você adicionar precisa passar por esse mesmo
+`processando`, senão o bug volta.
+
+### Login único: líder e vendedor com o mesmo e-mail
+
+A mesma pessoa pode ser líder **e** vendedor(a) do mesmo grupo, usando o
+mesmo e-mail e a mesma senha — não é um painel unificado, ela sai de um papel
+e entra no outro. Fica assim porque a tabela `perfis` deixou de ter `id`
+igual ao `auth.users.id`: `id` virou uma chave própria e `usuario_id` aponta
+pra conta de login, com `unique (usuario_id, papel)` — uma conta pode ter uma
+linha de líder e uma de vendedor, nunca duas do mesmo papel.
+
+Quando a conta só tem um papel, nada muda. Quando tem os dois, é a porta de
+entrada que desambigua: `TelaEntrada.jsx` → "Sou líder" / "Sou vendedor(a)" →
+`escolherPorta()` em `useSessao.jsx`, que grava `papelDesejado` (também no
+`localStorage`, mesmo padrão do `grupoDoDev`) e repassa isso pra todo RPC de
+"quem sou eu" (`meuPapel`, `meuGrupo`, `meuVendedorId`,
+`podeCorrigirVenda` em `lib/db/entrada.js` → `p_papel_desejado` no banco).
+Sem esse parâmetro (toda policy de RLS chama assim, sem argumento), o banco
+prefere a linha de líder/dev — é por isso que nenhuma policy precisou mudar.
+
+Ao sair (`sair()` em `useSessao.jsx`), `papelDesejado` é limpo — a pessoa
+volta pra tela de escolha, não fica "lembrada" no papel anterior.
+
+**Limite assumido:** o desenho cobre líder + vendedor **do mesmo grupo**. Ser
+líder de um grupo e vendedor de outro ao mesmo tempo não foi pedido e não
+está coberto (os helpers sem pista explícita preferem a linha de líder).
 
 ### Preço por destino (chalé x quarto) — só Kombo
 
@@ -585,6 +628,13 @@ de propósito.
 - **A CLI do Supabase já está instalada e linkada** nesta máquina ao projeto
   de produção (`odgweocenaopqxjgpdqm`). `supabase functions deploy <nome>`
   funciona direto, sem precisar rodar `supabase link` de novo.
+- **Trocar a assinatura de `meu_papel`/`meu_grupo`/`e_dev`/`e_lider`/
+  `meu_vendedor_id`/`pode_corrigir_venda` exige `drop function ... cascade`**,
+  não só `if exists`: políticas de RLS de várias tabelas dependem delas, e um
+  banco que já rodou uma versão anterior do script falha com "other objects
+  depend on it" sem o `cascade`. É seguro porque a seção 8 do próprio
+  `schema.sql` recria **todas** as políticas depois — mas só funciona se o
+  `cascade` estiver lá.
 
 ---
 
