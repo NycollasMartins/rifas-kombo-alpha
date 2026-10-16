@@ -26,12 +26,16 @@ export default function AbaVendedores() {
   } = useDadosRifa()
   const { grupo } = useSessao()
 
-  // Quem já finalizou (meta fechada) some daqui — o aviso pro outro sistema
-  // dispara sozinho no banco nesse momento, ver avisar_vendedor_finalizado
-  // no schema.sql.
+  const [mostrarFinalizados, setMostrarFinalizados] = useState(false)
+
+  // Quem já finalizou (meta fechada) some daqui por padrão — o aviso pro
+  // outro sistema dispara sozinho no banco nesse momento, ver
+  // avisar_vendedor_finalizado no schema.sql — mas a venda continua salva;
+  // "Mostrar quem já finalizou" é a única forma de ver essas vendas de novo
+  // (Ver vendas só existe nesta lista).
   const vendedores = useMemo(
-    () => todosDoGrupo.filter((v) => v.situacao !== 'quitou'),
-    [todosDoGrupo]
+    () => todosDoGrupo.filter((v) => mostrarFinalizados || v.situacao !== 'quitou'),
+    [todosDoGrupo, mostrarFinalizados]
   )
 
   const [emEdicao, setEmEdicao] = useState(null) // 'novo' | vendedor
@@ -149,7 +153,7 @@ export default function AbaVendedores() {
         </div>
       </div>
 
-      {vendedores.length > 0 && (
+      {todosDoGrupo.length > 0 && (
         <div className="filters">
           <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)}>
             <option value="">Todos</option>
@@ -164,12 +168,29 @@ export default function AbaVendedores() {
         </div>
       )}
 
+      {todosDoGrupo.length > 0 && (
+        <label className="rotulo-checkbox">
+          <input
+            type="checkbox"
+            checked={mostrarFinalizados}
+            onChange={(e) => setMostrarFinalizados(e.target.checked)}
+          />
+          Mostrar quem já finalizou (pra ver as vendas de novo)
+        </label>
+      )}
+
       {erro && <p className="error-text">{erro}</p>}
 
       {vendedores.length === 0 ? (
         <EstadoVazio icone="👤">
-          <p>Nenhum vendedor cadastrado.</p>
-          <p>Cadastre com o e-mail de cada um para que possam entrar.</p>
+          {todosDoGrupo.length > 0 ? (
+            <p>Todo mundo já finalizou — marque "Mostrar quem já finalizou" acima pra ver.</p>
+          ) : (
+            <>
+              <p>Nenhum vendedor cadastrado.</p>
+              <p>Cadastre com o e-mail de cada um para que possam entrar.</p>
+            </>
+          )}
         </EstadoVazio>
       ) : filtrados.length === 0 ? (
         <EstadoVazio icone="🔍">
