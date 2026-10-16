@@ -478,6 +478,20 @@ tem conta) → `redefinirSenhaDoVendedor` em `useSessao.jsx` → Edge Function
 senha"`, em `TelaVendedorEntrada.jsx`) continua existindo em paralelo, mas
 pra vendedor costuma ser mais prático o líder resolver na hora.
 
+### Quem já finalizou some da lista — mas a venda continua lá
+
+`AbaVendedores.jsx` esconde quem já está `'quitou'` da lista (e da busca) por
+padrão — é de propósito, pra não misturar quem a liderança ainda precisa
+cobrar com quem já terminou. O problema: como o botão "Ver vendas"
+(`ModalVendasDoVendedor`) só existe dentro dessa mesma lista, sem mais nada
+isso tirava qualquer jeito de conferir os números/compradores de quem já
+tinha finalizado — mesmo que a venda estivesse 100% salva no banco (bug real,
+confundido a princípio com perda de dado — não era: as vendas nunca saem do
+banco só por alguém finalizar). O checkbox **"Mostrar quem já finalizou"**
+(desligado por padrão) resolve: inclui essas pessoas na lista de novo, com a
+etiqueta de situação e as mesmas ações (menos "Fechar meta", que só faz
+sentido pra quem está `'ativo'`).
+
 ### Integração por webhook
 
 Quando a situação de um vendedor passa a `'quitou'` (meta fechada — pelo
