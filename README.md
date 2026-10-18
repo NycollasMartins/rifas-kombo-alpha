@@ -659,6 +659,17 @@ de propósito.
   depend on it" sem o `cascade`. É seguro porque a seção 8 do próprio
   `schema.sql` recria **todas** as políticas depois — mas só funciona se o
   `cascade` estiver lá.
+- **Toda consulta que busca uma LISTA (não uma linha só) tem que usar
+  `buscarTudoPaginado` (`src/lib/db/paginacao.js`), nunca um `select('*')`
+  cru.** O Supabase corta qualquer consulta em 1000 linhas por padrão, **sem
+  erro nem aviso** — só devolve menos do que existe. Isso já aconteceu de
+  verdade: o grupo Alpha passou de 1000 vendas e `listarVendas()` (ordenada
+  por número decrescente) começou a cortar as vendas mais ANTIGAS da tela,
+  fazendo vendedores que já tinham vendido tudo parecerem com a meta
+  incompleta — a venda nunca saiu do banco, só não chegava até o front-end.
+  `vendas`, `vendedores`, `vendedores_privado` e `sorteios` já usam o
+  helper; qualquer tabela nova que cresça (uma linha por evento, não uma por
+  grupo/config) precisa do mesmo tratamento desde o primeiro dia.
 
 ---
 
