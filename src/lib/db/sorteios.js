@@ -1,5 +1,6 @@
 import { supabase } from '../supabase'
 import { verificar } from './erros'
+import { buscarTudoPaginado } from './paginacao'
 
 export function mapearSorteio(linha) {
   return {
@@ -11,8 +12,8 @@ export function mapearSorteio(linha) {
 }
 
 export async function listarSorteios() {
-  const linhas = verificar(
-    await supabase.from('sorteios').select('*').order('data', { ascending: false }),
+  const linhas = await buscarTudoPaginado(
+    () => supabase.from('sorteios').select('*').order('data', { ascending: false }),
     'Não foi possível carregar o histórico de sorteios.'
   )
   return linhas.map(mapearSorteio)

@@ -1,5 +1,6 @@
 import { supabase } from '../supabase'
 import { verificar } from './erros'
+import { buscarTudoPaginado } from './paginacao'
 
 export function mapearVendedor(linha) {
   return {
@@ -21,8 +22,8 @@ export function mapearVendedor(linha) {
 }
 
 export async function listarVendedores() {
-  const linhas = verificar(
-    await supabase.from('vendedores').select('*').order('nome', { ascending: true }),
+  const linhas = await buscarTudoPaginado(
+    () => supabase.from('vendedores').select('*').order('nome', { ascending: true }),
     'Não foi possível carregar os vendedores.'
   )
   return linhas.map(mapearVendedor)

@@ -1,5 +1,6 @@
 import { supabase } from '../supabase'
 import { verificar } from './erros'
+import { buscarTudoPaginado } from './paginacao'
 
 /**
  * Dados do vendedor que NÃO podem ser públicos: a anotação sobre uma
@@ -23,14 +24,20 @@ export function mapearPrivado(linha) {
 
 /** Devolve um objeto indexado por id do vendedor. Vazio se ninguém logado. */
 export async function listarDadosPrivados() {
-  const { data, error } = await supabase.from('vendedores_privado').select('*')
-
   // Sem login o banco simplesmente não devolve nada — isso é o esperado,
   // não é erro que precise aparecer para o vendedor.
-  if (error) return {}
+  let linhas
+  try {
+    linhas = await buscarTudoPaginado(
+      () => supabase.from('vendedores_privado').select('*'),
+      'Não foi possível carregar os dados privados.'
+    )
+  } catch {
+    return {}
+  }
 
   const porVendedor = {}
-  ;(data || []).forEach((linha) => {
+  linhas.forEach((linha) => {
     porVendedor[linha.vendedor_id] = mapearPrivado(linha)
   })
   return porVendedor
