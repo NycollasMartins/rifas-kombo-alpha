@@ -13,6 +13,18 @@ import { rifasParaFecharMeta } from '../../utils/prazo'
 import { traduzirErro } from '../../lib/db/erros'
 import estilos from './AbaVendedores.module.css'
 
+/**
+ * Separa em palavras pra busca "começa com" — sem isso, procurar uma letra
+ * batia com qualquer e-mail que tivesse ela em qualquer posição (ex: buscar
+ * "b" trazia nomes com "A" só porque o e-mail tinha um "b" no meio).
+ */
+function palavrasDe(texto) {
+  return (texto || '')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+}
+
 /** Os vendedores do grupo: cadastro, termo, vendas e fechamento de meta. */
 export default function AbaVendedores() {
   const {
@@ -31,10 +43,14 @@ export default function AbaVendedores() {
   // Quem já finalizou (meta fechada) some daqui por padrão — o aviso pro
   // outro sistema dispara sozinho no banco nesse momento, ver
   // avisar_vendedor_finalizado no schema.sql — mas a venda continua salva;
-  // "Mostrar quem já finalizou" é a única forma de ver essas vendas de novo
-  // (Ver vendas só existe nesta lista).
+  // "Mostrar quem já finalizou" troca pra ver SÓ quem já finalizou (não
+  // mistura com quem ainda está vendendo), já que é a única forma de ver
+  // essas vendas de novo (Ver vendas só existe nesta lista).
   const vendedores = useMemo(
-    () => todosDoGrupo.filter((v) => mostrarFinalizados || v.situacao !== 'quitou'),
+    () =>
+      todosDoGrupo.filter((v) =>
+        mostrarFinalizados ? v.situacao === 'quitou' : v.situacao !== 'quitou'
+      ),
     [todosDoGrupo, mostrarFinalizados]
   )
 
@@ -58,9 +74,15 @@ export default function AbaVendedores() {
   const filtrados = useMemo(() => {
     const termo = busca.trim().toLowerCase()
     if (!termo) return doTipo
-    return doTipo.filter((v) =>
-      `${v.nome} ${v.email} ${v.telefone}`.toLowerCase().includes(termo)
-    )
+    const soDigitos = termo.replace(/\D/g, '')
+    return doTipo.filter((v) => {
+      const bateuPalavra = [...palavrasDe(v.nome), ...palavrasDe(v.email)].some((p) =>
+        p.startsWith(termo)
+      )
+      const bateuTelefone =
+        soDigitos.length > 0 && (v.telefone || '').replace(/\D/g, '').includes(soDigitos)
+      return bateuPalavra || bateuTelefone
+    })
   }, [doTipo, busca])
 
   async function excluir(vendedor) {
@@ -175,7 +197,7 @@ export default function AbaVendedores() {
             checked={mostrarFinalizados}
             onChange={(e) => setMostrarFinalizados(e.target.checked)}
           />
-          Mostrar quem já finalizou (pra ver as vendas de novo)
+          Mostrar só quem já finalizou (pra ver as vendas de novo)
         </label>
       )}
 
@@ -183,13 +205,15 @@ export default function AbaVendedores() {
 
       {vendedores.length === 0 ? (
         <EstadoVazio icone="👤">
-          {todosDoGrupo.length > 0 ? (
-            <p>Todo mundo já finalizou — marque "Mostrar quem já finalizou" acima pra ver.</p>
-          ) : (
+          {todosDoGrupo.length === 0 ? (
             <>
               <p>Nenhum vendedor cadastrado.</p>
               <p>Cadastre com o e-mail de cada um para que possam entrar.</p>
             </>
+          ) : mostrarFinalizados ? (
+            <p>Ninguém finalizou ainda.</p>
+          ) : (
+            <p>Todo mundo já finalizou — marque "Mostrar só quem já finalizou" acima pra ver.</p>
           )}
         </EstadoVazio>
       ) : filtrados.length === 0 ? (
