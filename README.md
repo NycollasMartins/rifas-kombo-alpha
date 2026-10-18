@@ -487,10 +487,20 @@ cobrar com quem já terminou. O problema: como o botão "Ver vendas"
 isso tirava qualquer jeito de conferir os números/compradores de quem já
 tinha finalizado — mesmo que a venda estivesse 100% salva no banco (bug real,
 confundido a princípio com perda de dado — não era: as vendas nunca saem do
-banco só por alguém finalizar). O checkbox **"Mostrar quem já finalizou"**
-(desligado por padrão) resolve: inclui essas pessoas na lista de novo, com a
-etiqueta de situação e as mesmas ações (menos "Fechar meta", que só faz
-sentido pra quem está `'ativo'`).
+banco só por alguém finalizar). O checkbox **"Mostrar só quem já
+finalizou"** (desligado por padrão) resolve: é uma troca exclusiva, não um
+"adicionar à lista" — desmarcado mostra como sempre foi (quem ainda não
+finalizou), marcado mostra só quem já finalizou, nunca os dois juntos.
+**Pegadinha já cometida aqui:** escrever essa condição com `||` em vez de
+`? :` faz o filtro virar "sempre verdadeiro" pro grupo errado e mostrar todo
+mundo — teste trocando o checkbox dos dois lados antes de dar como certo.
+
+A busca dessa mesma aba compara **palavra a palavra** (nome e e-mail
+separados em tokens) com "começa com o termo digitado" — nunca um
+`includes` cru em `nome+email+telefone` colados numa string só. Essa forma
+antiga fazia buscar uma letra solta (ex: "b") trazer gente com nome
+completamente diferente, só porque o e-mail tinha aquela letra escondida em
+qualquer posição.
 
 ### Integração por webhook
 
