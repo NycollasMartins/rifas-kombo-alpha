@@ -201,6 +201,23 @@ alter table public.vendedores drop constraint if exists vendedores_situacao_chec
 alter table public.vendedores add constraint vendedores_situacao_check
   check (situacao in ('ativo', 'quitou', 'desistiu'));
 
+-- Login único também pro vendedor: a mesma pessoa pode se cadastrar como
+-- vendedor(a) do Alpha E do Kombo com o mesmo e-mail — cada grupo com o seu
+-- próprio cadastro (meta, vendas, situação), só o e-mail/senha é comum. Por
+-- isso o e-mail deixa de ser único no sistema inteiro e passa a ser único
+-- por grupo.
+alter table public.vendedores drop constraint if exists vendedores_email_key;
+do $$
+begin
+  if not exists (select 1 from information_schema.table_constraints
+                 where table_schema = 'public' and table_name = 'vendedores'
+                   and constraint_name = 'vendedores_grupo_email_unico') then
+    alter table public.vendedores add constraint vendedores_grupo_email_unico
+      unique (grupo, email);
+  end if;
+end
+$$;
+
 -- ---- perfis: quem é quem depois de logar -----------------------------------
 --  dev      -> enxerga os dois grupos e corrige dados
 --  lider    -> enxerga só o próprio grupo
@@ -245,14 +262,22 @@ begin
     alter table public.perfis add constraint perfis_usuario_id_fkey
       foreign key (usuario_id) references auth.users (id) on delete cascade;
   end if;
-  if not exists (select 1 from information_schema.table_constraints
-                 where table_schema = 'public' and table_name = 'perfis'
-                   and constraint_name = 'perfis_usuario_papel_unico') then
-    alter table public.perfis add constraint perfis_usuario_papel_unico
-      unique (usuario_id, papel);
-  end if;
 end
 $$;
+
+-- Login único também pro vendedor: a mesma conta pode ter um perfil de
+-- vendedor(a) EM CADA GRUPO (Alpha e Kombo), não só um pra sempre. Por isso
+-- a trava "um perfil por papel" vira dois índices parciais em vez de um
+-- único `unique (usuario_id, papel)`: dev/líder continuam travados numa
+-- linha só por conta (sem mudança de comportamento); vendedor passa a
+-- travar por conta+grupo, permitindo uma linha de vendedor por grupo.
+alter table public.perfis drop constraint if exists perfis_usuario_papel_unico;
+
+create unique index if not exists perfis_dev_lider_unico
+  on public.perfis (usuario_id, papel) where papel in ('dev', 'lider');
+
+create unique index if not exists perfis_vendedor_por_grupo_unico
+  on public.perfis (usuario_id, grupo) where papel = 'vendedor';
 
 create index if not exists perfis_usuario_idx on public.perfis (usuario_id);
 
@@ -341,27 +366,31 @@ insert into public.integracao_webhook (grupo) values ('Alpha'), ('Kombo') on con
 --  SECURITY DEFINER porque estas funções são chamadas de dentro das políticas
 --  de RLS da própria tabela perfis — sem isso o Postgres entra em recursão.
 --
---  Cada uma aceita um "p_papel_desejado" opcional ('lider' ou 'vendedor'):
---  com login único pra líder e vendedor, pode existir mais de uma linha de
---  perfil pra mesma conta, e esse parâmetro diz qual delas vale pra esta
---  chamada. Sem ele (como toda política de RLS já chama hoje, sem
---  argumento), prefere a linha de líder/dev — mantém o comportamento de
---  sempre pra quem só tem um papel.
+--  Cada uma aceita "p_papel_desejado" ('lider' ou 'vendedor') e
+--  "p_grupo_desejado" ('Alpha' ou 'Kombo'), os dois opcionais: com login
+--  único pra líder e vendedor (e vendedor podendo ter uma linha POR GRUPO),
+--  pode existir mais de uma linha de perfil pra mesma conta, e esses
+--  parâmetros dizem qual delas vale pra esta chamada — o grupo só importa
+--  quando o papel desejado é 'vendedor' (é o único caso com mais de uma
+--  linha possível por grupo). Sem eles (como toda política de RLS já chama
+--  hoje, sem argumento), prefere a linha de líder/dev e, entre vendedores,
+--  a de menor nome de grupo — mantém o comportamento de sempre pra quem só
+--  tem um papel/grupo.
 -- ============================================================================
 
--- assinaturas antigas (sem o parâmetro) ficam como overload morto se não
+-- assinaturas antigas (sem os parâmetros) ficam como overload morto se não
 -- remover — mesmo cuidado já tomado antes com registrar_vendedor_autonomo.
 -- "cascade" porque as políticas de RLS já existentes (de uma execução
 -- anterior deste script) dependem dessas funções; a seção 8, mais abaixo,
 -- recria TODAS as políticas do banco, então nada fica faltando.
-drop function if exists public.meu_papel() cascade;
-drop function if exists public.meu_grupo() cascade;
-drop function if exists public.e_dev() cascade;
-drop function if exists public.e_lider() cascade;
-drop function if exists public.meu_vendedor_id() cascade;
-drop function if exists public.pode_corrigir_venda() cascade;
+drop function if exists public.meu_papel(text) cascade;
+drop function if exists public.meu_grupo(text) cascade;
+drop function if exists public.e_dev(text) cascade;
+drop function if exists public.e_lider(text) cascade;
+drop function if exists public.meu_vendedor_id(text) cascade;
+drop function if exists public.pode_corrigir_venda(text) cascade;
 
-create or replace function public.meu_papel(p_papel_desejado text default null)
+create or replace function public.meu_papel(p_papel_desejado text default null, p_grupo_desejado text default null)
 returns text language sql stable security definer set search_path = public as $$
   select coalesce(
     (select papel from public.perfis
@@ -369,54 +398,58 @@ returns text language sql stable security definer set search_path = public as $$
         and (p_papel_desejado is null
              or (p_papel_desejado = 'lider' and papel in ('dev', 'lider'))
              or (p_papel_desejado = 'vendedor' and papel = 'vendedor'))
-      order by case papel when 'dev' then 0 when 'lider' then 1 else 2 end
+        and (p_grupo_desejado is null or papel <> 'vendedor' or grupo = p_grupo_desejado)
+      order by case papel when 'dev' then 0 when 'lider' then 1 else 2 end, grupo
       limit 1),
     'sem_acesso'
   )
 $$;
 
-create or replace function public.meu_grupo(p_papel_desejado text default null)
+create or replace function public.meu_grupo(p_papel_desejado text default null, p_grupo_desejado text default null)
 returns text language sql stable security definer set search_path = public as $$
   select grupo from public.perfis
     where usuario_id = auth.uid()
       and (p_papel_desejado is null
            or (p_papel_desejado = 'lider' and papel in ('dev', 'lider'))
            or (p_papel_desejado = 'vendedor' and papel = 'vendedor'))
-    order by case papel when 'dev' then 0 when 'lider' then 1 else 2 end
+      and (p_grupo_desejado is null or papel <> 'vendedor' or grupo = p_grupo_desejado)
+    order by case papel when 'dev' then 0 when 'lider' then 1 else 2 end, grupo
     limit 1
 $$;
 
-create or replace function public.e_dev(p_papel_desejado text default null)
+create or replace function public.e_dev(p_papel_desejado text default null, p_grupo_desejado text default null)
 returns boolean language sql stable security definer set search_path = public as $$
-  select public.meu_papel(p_papel_desejado) = 'dev'
+  select public.meu_papel(p_papel_desejado, p_grupo_desejado) = 'dev'
 $$;
 
-create or replace function public.e_lider(p_papel_desejado text default null)
+create or replace function public.e_lider(p_papel_desejado text default null, p_grupo_desejado text default null)
 returns boolean language sql stable security definer set search_path = public as $$
-  select public.meu_papel(p_papel_desejado) in ('dev', 'lider')
+  select public.meu_papel(p_papel_desejado, p_grupo_desejado) in ('dev', 'lider')
 $$;
 
-create or replace function public.meu_vendedor_id(p_papel_desejado text default null)
+create or replace function public.meu_vendedor_id(p_papel_desejado text default null, p_grupo_desejado text default null)
 returns uuid language sql stable security definer set search_path = public as $$
   select vendedor_id from public.perfis
     where usuario_id = auth.uid()
       and (p_papel_desejado is null
            or (p_papel_desejado = 'lider' and papel in ('dev', 'lider'))
            or (p_papel_desejado = 'vendedor' and papel = 'vendedor'))
-    order by case papel when 'dev' then 0 when 'lider' then 1 else 2 end
+      and (p_grupo_desejado is null or papel <> 'vendedor' or grupo = p_grupo_desejado)
+    order by case papel when 'dev' then 0 when 'lider' then 1 else 2 end, grupo
     limit 1
 $$;
 
 /** Dev sempre pode; líder só se o dev liberou (Usuários -> Corrigir venda). */
-create or replace function public.pode_corrigir_venda(p_papel_desejado text default null)
+create or replace function public.pode_corrigir_venda(p_papel_desejado text default null, p_grupo_desejado text default null)
 returns boolean language sql stable security definer set search_path = public as $$
-  select public.e_dev(p_papel_desejado) or coalesce(
+  select public.e_dev(p_papel_desejado, p_grupo_desejado) or coalesce(
     (select pode_corrigir_venda from public.perfis
       where usuario_id = auth.uid()
         and (p_papel_desejado is null
              or (p_papel_desejado = 'lider' and papel in ('dev', 'lider'))
              or (p_papel_desejado = 'vendedor' and papel = 'vendedor'))
-      order by case papel when 'dev' then 0 when 'lider' then 1 else 2 end
+        and (p_grupo_desejado is null or papel <> 'vendedor' or grupo = p_grupo_desejado)
+      order by case papel when 'dev' then 0 when 'lider' then 1 else 2 end, grupo
       limit 1),
     false
   )
@@ -482,9 +515,12 @@ $$;
 
 /**
  * Primeiro acesso do vendedor: liga a conta recém-criada ao cadastro que o
- * líder já tinha feito, casando pelo e-mail.
+ * líder já tinha feito, casando pelo e-mail. "p_grupo" desambigua quando o
+ * mesmo e-mail tem cadastro de vendedor em mais de um grupo (login único).
  */
-create or replace function public.vincular_vendedor()
+drop function if exists public.vincular_vendedor() cascade;
+
+create or replace function public.vincular_vendedor(p_grupo text default null)
 returns text
 language plpgsql security definer
 set search_path = public
@@ -492,20 +528,33 @@ as $$
 declare
   v_email     text;
   v_vendedor  public.vendedores%rowtype;
+  v_qtd       integer;
 begin
   if auth.uid() is null then
     raise exception 'Faça o cadastro de e-mail e senha antes.';
   end if;
 
-  -- já tem perfil de VENDEDOR nessa conta? não deixa linkar de novo — mas
-  -- ser líder nessa mesma conta não impede virar vendedor também
-  if exists (select 1 from public.perfis where usuario_id = auth.uid() and papel = 'vendedor') then
+  -- já tem perfil de VENDEDOR desse grupo nessa conta? não deixa linkar de
+  -- novo — mas ser vendedor de OUTRO grupo (ou líder) nessa mesma conta não
+  -- impede virar vendedor aqui também (login único, um perfil por grupo)
+  if exists (
+    select 1 from public.perfis
+     where usuario_id = auth.uid() and papel = 'vendedor'
+       and (p_grupo is null or grupo = p_grupo)
+  ) then
     return 'vendedor';
   end if;
 
   select lower(email) into v_email from auth.users where id = auth.uid();
 
-  select * into v_vendedor from public.vendedores where lower(email) = v_email;
+  select count(*) into v_qtd from public.vendedores where lower(email) = v_email;
+  if v_qtd > 1 and p_grupo is null then
+    raise exception 'Este e-mail tem cadastro em mais de um grupo.'
+      using hint = 'Escolha de qual grupo você é vendedor(a) antes de continuar.';
+  end if;
+
+  select * into v_vendedor from public.vendedores
+   where lower(email) = v_email and (p_grupo is null or grupo = p_grupo);
   if not found then
     raise exception 'Este e-mail não está cadastrado como vendedor.'
       using hint = 'Peça ao líder do seu grupo para cadastrar você com este mesmo e-mail.';
@@ -606,9 +655,14 @@ begin
   if p_grupo not in ('Alpha', 'Kombo') then
     raise exception 'Escolha Alpha ou Kombo.';
   end if;
-  -- já tem perfil de VENDEDOR nessa conta? não faz nada — mas ser líder
-  -- nessa mesma conta não impede virar vendedor também (login único)
-  if exists (select 1 from public.perfis where usuario_id = auth.uid() and papel = 'vendedor') then
+  -- já tem perfil de VENDEDOR desse grupo nessa conta? não faz nada — mas
+  -- ser líder, ou vendedor de OUTRO grupo, nessa mesma conta não impede
+  -- virar vendedor aqui também (login único, um perfil de vendedor por
+  -- grupo)
+  if exists (
+    select 1 from public.perfis
+     where usuario_id = auth.uid() and papel = 'vendedor' and grupo = p_grupo
+  ) then
     return;
   end if;
   if length(btrim(coalesce(p_nome, ''))) = 0 then
@@ -630,7 +684,9 @@ begin
     raise exception 'Código incorreto.';
   end if;
 
-  select * into v_vendedor from public.vendedores where lower(email) = v_email;
+  -- casa pelo e-mail DENTRO DESTE GRUPO — o mesmo e-mail pode já ter um
+  -- cadastro no outro grupo (login único), e esse não entra na conta aqui
+  select * into v_vendedor from public.vendedores where lower(email) = v_email and grupo = p_grupo;
 
   if found then
     if v_vendedor.user_id is not null and v_vendedor.user_id <> auth.uid() then
@@ -796,18 +852,65 @@ end;
 $$;
 
 /**
+ * O vendedor completa a própria compra que ficou incompleta: marca como
+ * pago/pendente e/ou anexa o comprovante que faltava, em TODAS as rifas do
+ * lote de uma vez (compartilham o mesmo status/comprovante — foram
+ * registradas juntas). Vai por função, e não por `update` direto como
+ * antes, porque a policy de RLS "vendas: o vendedor completa a própria"
+ * (`vendedor_id = meu_vendedor_id()`, sem parâmetro) não tem como saber de
+ * qual conta de vendedor se trata quando o mesmo e-mail é vendedor(a) em
+ * mais de um grupo — só uma função recebendo "p_grupo" explícito resolve
+ * isso sem ambiguidade.
+ */
+create or replace function public.completar_minha_venda(
+  p_lote_id          uuid,
+  p_status           text default null,
+  p_comprovante_path text default null,
+  p_grupo            text default null
+)
+returns setof public.vendas
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  v_vendedor_id uuid := public.meu_vendedor_id('vendedor', p_grupo);
+begin
+  if v_vendedor_id is null then
+    raise exception 'Só o vendedor pode completar a própria venda.';
+  end if;
+
+  if not exists (
+    select 1 from public.vendas
+     where lote_id = p_lote_id and vendedor_id = v_vendedor_id and repasse = 'pendente'
+  ) then
+    raise exception 'Esta compra não é sua, ou o repasse já começou a ser conferido.'
+      using hint = 'Depois que a liderança começa a conferir o repasse, só ela pode alterar.';
+  end if;
+
+  return query
+  update public.vendas
+     set status = coalesce(p_status, status),
+         comprovante_path = coalesce(p_comprovante_path, comprovante_path)
+   where lote_id = p_lote_id and vendedor_id = v_vendedor_id and repasse = 'pendente'
+  returning *;
+end;
+$$;
+
+/**
  * Assinatura digital do termo: o vendedor lê o texto (já com os dados dele)
  * dentro do app e digita o próprio nome. Grava o nome, o texto exato lido e
  * a data em vendedores_privado — mas o vendedor nunca ganha permissão de
  * ler essa tabela, só de chamar esta função. É por isso que fica bem aqui,
  * não numa política de RLS.
  */
-create or replace function public.assinar_termo(p_nome text, p_conteudo text)
+drop function if exists public.assinar_termo(text, text) cascade;
+
+create or replace function public.assinar_termo(p_nome text, p_conteudo text, p_grupo text default null)
 returns void
 language plpgsql security definer set search_path = public
 as $$
 declare
-  v_vendedor_id uuid := public.meu_vendedor_id();
+  v_vendedor_id uuid := public.meu_vendedor_id('vendedor', p_grupo);
 begin
   if v_vendedor_id is null then
     raise exception 'Só o vendedor pode assinar o próprio termo.';
@@ -1351,32 +1454,34 @@ grant insert, update, delete on public.perfis             to authenticated;
 
 -- as funções decidem quem pode o quê; anon só precisa das duas de entrada
 revoke all on function public.registrar_lider(text, text, text)                     from public, anon;
-revoke all on function public.vincular_vendedor()                                   from public, anon;
+revoke all on function public.vincular_vendedor(text)                               from public, anon;
 revoke all on function public.definir_codigo_de_lider(text, text)                   from public, anon;
 revoke all on function public.definir_codigo_de_vendedor(text, text)                from public, anon;
 revoke all on function public.registrar_vendedor_autonomo(text, text, text, text, text, text, text) from public, anon;
 revoke all on function public.registrar_venda(integer, text, text, text, text, text, uuid) from public, anon;
-revoke all on function public.assinar_termo(text, text) from public, anon;
+revoke all on function public.assinar_termo(text, text, text) from public, anon;
+revoke all on function public.completar_minha_venda(uuid, text, text, text)         from public, anon;
 revoke all on function public.fechar_meta_do_vendedor(uuid, text)                   from public, anon;
 revoke all on function public.transferir_vendas(uuid, uuid)                         from public, anon;
 revoke all on function public.apagar_dados_do_grupo(text)                           from public, anon;
 revoke all on function public.forcar_reenvio_webhooks()                             from public, anon;
 
 grant execute on function public.registrar_lider(text, text, text)                     to authenticated;
-grant execute on function public.vincular_vendedor()                                   to authenticated;
+grant execute on function public.vincular_vendedor(text)                               to authenticated;
 grant execute on function public.definir_codigo_de_lider(text, text)                   to authenticated;
 grant execute on function public.definir_codigo_de_vendedor(text, text)                to authenticated;
 grant execute on function public.registrar_vendedor_autonomo(text, text, text, text, text, text, text) to authenticated;
 grant execute on function public.registrar_venda(integer, text, text, text, text, text, uuid) to authenticated;
-grant execute on function public.assinar_termo(text, text) to authenticated;
+grant execute on function public.assinar_termo(text, text, text) to authenticated;
+grant execute on function public.completar_minha_venda(uuid, text, text, text)         to authenticated;
 grant execute on function public.fechar_meta_do_vendedor(uuid, text)                   to authenticated;
 grant execute on function public.transferir_vendas(uuid, uuid)                         to authenticated;
 grant execute on function public.apagar_dados_do_grupo(text)                           to authenticated;
 grant execute on function public.forcar_reenvio_webhooks()                             to authenticated;
-grant execute on function public.meu_papel(text), public.meu_grupo(text), public.e_dev(text),
-                          public.e_lider(text), public.meu_vendedor_id(text),
+grant execute on function public.meu_papel(text, text), public.meu_grupo(text, text), public.e_dev(text, text),
+                          public.e_lider(text, text), public.meu_vendedor_id(text, text),
                           public.posso_ver(text), public.codigo_definido(text),
-                          public.pode_corrigir_venda(text)
+                          public.pode_corrigir_venda(text, text)
   to anon, authenticated;
 
 -- ============================================================================
@@ -1480,7 +1585,8 @@ $$;
 --
 --     insert into public.perfis (usuario_id, nome, papel, grupo)
 --     select id, 'Dev', 'dev', null from auth.users where email = 'voce@email.com'
---     on conflict (usuario_id, papel) do update set grupo = null;
+--     on conflict (usuario_id, papel) where papel in ('dev', 'lider')
+--     do update set grupo = null;
 --
 --  3. Defina os códigos de liderança dos dois grupos (troque as palavras):
 --

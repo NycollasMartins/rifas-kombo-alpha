@@ -12,26 +12,38 @@ import { traduzirErro } from './erros'
  * e quem casa o e-mail é o banco.
  */
 
-export async function meuPapel(papelDesejado) {
-  const { data, error } = await supabase.rpc('meu_papel', { p_papel_desejado: papelDesejado || null })
+export async function meuPapel(papelDesejado, grupoDesejado) {
+  const { data, error } = await supabase.rpc('meu_papel', {
+    p_papel_desejado: papelDesejado || null,
+    p_grupo_desejado: grupoDesejado || null,
+  })
   if (error) throw new Error(traduzirErro(error, 'Não foi possível verificar o seu acesso.'))
   return data || 'sem_acesso'
 }
 
-export async function meuGrupo(papelDesejado) {
-  const { data, error } = await supabase.rpc('meu_grupo', { p_papel_desejado: papelDesejado || null })
+export async function meuGrupo(papelDesejado, grupoDesejado) {
+  const { data, error } = await supabase.rpc('meu_grupo', {
+    p_papel_desejado: papelDesejado || null,
+    p_grupo_desejado: grupoDesejado || null,
+  })
   if (error) return null
   return data || null
 }
 
-export async function meuVendedorId(papelDesejado) {
-  const { data, error } = await supabase.rpc('meu_vendedor_id', { p_papel_desejado: papelDesejado || null })
+export async function meuVendedorId(papelDesejado, grupoDesejado) {
+  const { data, error } = await supabase.rpc('meu_vendedor_id', {
+    p_papel_desejado: papelDesejado || null,
+    p_grupo_desejado: grupoDesejado || null,
+  })
   if (error) return null
   return data || null
 }
 
-export async function podeCorrigirVenda(papelDesejado) {
-  const { data, error } = await supabase.rpc('pode_corrigir_venda', { p_papel_desejado: papelDesejado || null })
+export async function podeCorrigirVenda(papelDesejado, grupoDesejado) {
+  const { data, error } = await supabase.rpc('pode_corrigir_venda', {
+    p_papel_desejado: papelDesejado || null,
+    p_grupo_desejado: grupoDesejado || null,
+  })
   if (error) return false
   return Boolean(data)
 }
@@ -47,9 +59,12 @@ export async function registrarLider(grupo, codigo, nome) {
   return data
 }
 
-/** Liga a conta recém-criada ao cadastro que o líder já tinha feito. */
-export async function vincularVendedor() {
-  const { data, error } = await supabase.rpc('vincular_vendedor')
+/**
+ * Liga a conta recém-criada ao cadastro que o líder já tinha feito. "grupo"
+ * desambigua quando o mesmo e-mail é vendedor(a) em mais de um grupo.
+ */
+export async function vincularVendedor(grupo) {
+  const { data, error } = await supabase.rpc('vincular_vendedor', { p_grupo: grupo || null })
   if (error) throw new Error(traduzirErro(error, 'Não foi possível liberar o seu acesso.'))
   return data
 }
@@ -61,8 +76,12 @@ export async function codigoDefinido(grupo) {
 }
 
 /** Assinatura digital do termo: o vendedor digita o nome, o app grava. */
-export async function assinarTermo(nome, conteudo) {
-  const { error } = await supabase.rpc('assinar_termo', { p_nome: nome, p_conteudo: conteudo })
+export async function assinarTermo(nome, conteudo, grupo) {
+  const { error } = await supabase.rpc('assinar_termo', {
+    p_nome: nome,
+    p_conteudo: conteudo,
+    p_grupo: grupo || null,
+  })
   if (error) throw new Error(traduzirErro(error, 'Não foi possível assinar o termo.'))
 }
 

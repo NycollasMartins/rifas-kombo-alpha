@@ -114,7 +114,7 @@ export default function TelaLider({ aoVoltar }) {
           <input
             id="lider-email"
             type="email"
-            autoComplete="email"
+            autoComplete="username"
             inputMode="email"
             placeholder="voce@email.com"
             value={email}

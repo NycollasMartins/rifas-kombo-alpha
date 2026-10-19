@@ -218,7 +218,7 @@ export function ProvedorDadosRifa({ children }) {
 
       /** O vendedor completa a própria compra: status e/ou comprovante. */
       async completarCompra(loteId, dados) {
-        const atualizadas = await completarLote(loteId, dados)
+        const atualizadas = await completarLote(loteId, dados, grupo)
         setTodasVendas((atual) => atualizadas.reduce(mesclar, atual))
         return atualizadas
       },
@@ -261,7 +261,7 @@ export function ProvedorDadosRifa({ children }) {
 
       /** O vendedor assina o próprio termo digitando o nome. */
       async assinarMeuTermo(nome, conteudo) {
-        await assinarTermo(nome, conteudo)
+        await assinarTermo(nome, conteudo, grupo)
         setTodosVendedores((a) =>
           mesclar(
             a,

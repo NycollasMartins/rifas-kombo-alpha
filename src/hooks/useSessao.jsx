@@ -28,6 +28,7 @@ const SessaoContexto = createContext(null)
 const SEM_ACESSO = { papel: 'anonimo', grupo: null, vendedorId: null }
 const CHAVE_GRUPO_DO_DEV = 'rifas-grupo-do-dev'
 const CHAVE_PAPEL_DESEJADO = 'rifas-papel-desejado'
+const CHAVE_GRUPO_DESEJADO = 'rifas-grupo-desejado'
 
 /** O dev não pertence a um grupo: ele escolhe qual está olhando no momento. */
 function lerGrupoDoDev() {
@@ -49,6 +50,20 @@ function lerPapelDesejado() {
   }
 }
 
+/**
+ * De qual grupo é o vendedor(a) escolhido — só importa pra quem tem o
+ * mesmo e-mail cadastrado como vendedor(a) em mais de um grupo (login
+ * único); nos outros casos o backend resolve sozinho.
+ */
+function lerGrupoDesejado() {
+  try {
+    const guardado = localStorage.getItem(CHAVE_GRUPO_DESEJADO)
+    return grupoValido(guardado) ? guardado : null
+  } catch {
+    return null
+  }
+}
+
 export function ProvedorSessao({ children }) {
   const [sessao, setSessao] = useState(null)
   const [acesso, setAcesso] = useState(SEM_ACESSO)
@@ -57,6 +72,7 @@ export function ProvedorSessao({ children }) {
   const [recuperandoSenha, setRecuperandoSenha] = useState(false)
   const [grupoDoDev, setGrupoDoDev] = useState(lerGrupoDoDev)
   const [papelDesejado, setPapelDesejado] = useState(lerPapelDesejado)
+  const [grupoDesejado, setGrupoDesejado] = useState(lerGrupoDesejado)
 
   useEffect(() => {
     let ativo = true
@@ -82,15 +98,15 @@ export function ProvedorSessao({ children }) {
    * entrar) decide qual dos dois vale agora.
    */
   const carregarAcesso = useCallback(async () => {
-    const papel = await meuPapel(papelDesejado)
+    const papel = await meuPapel(papelDesejado, grupoDesejado)
     if (papel === 'sem_acesso') return { ...SEM_ACESSO, papel }
     const [grupo, vendedorId, corrigirVenda] = await Promise.all([
-      meuGrupo(papelDesejado),
-      meuVendedorId(papelDesejado),
-      podeCorrigirVenda(papelDesejado),
+      meuGrupo(papelDesejado, grupoDesejado),
+      meuVendedorId(papelDesejado, grupoDesejado),
+      podeCorrigirVenda(papelDesejado, grupoDesejado),
     ])
     return { papel, grupo, vendedorId, podeCorrigirVenda: corrigirVenda }
-  }, [papelDesejado])
+  }, [papelDesejado, grupoDesejado])
 
   useEffect(() => {
     let ativo = true
@@ -138,6 +154,7 @@ export function ProvedorSessao({ children }) {
       processando,
       recuperandoSenha,
       papelDesejado,
+      grupoDesejado,
 
       /** Só o dev troca de grupo; para os outros não faz nada. */
       trocarDeGrupo(novo) {
@@ -150,12 +167,23 @@ export function ProvedorSessao({ children }) {
         }
       },
 
-      /** Escolhe a porta de entrada: líder ou vendedor(a) (ou volta pra tela inicial). */
-      escolherPorta(novo) {
-        setPapelDesejado(novo)
+      /**
+       * Escolhe a porta de entrada: líder ou vendedor(a) (ou volta pra tela
+       * inicial, passando `null`). Pra vendedor(a), também recebe de qual
+       * grupo — necessário pra desambiguar quando o mesmo e-mail é
+       * vendedor(a) em mais de um grupo (login único).
+       */
+      escolherPorta(novoPapel, novoGrupo = null) {
+        setPapelDesejado(novoPapel)
+        setGrupoDesejado(novoPapel === 'vendedor' ? novoGrupo : null)
         try {
-          if (novo) localStorage.setItem(CHAVE_PAPEL_DESEJADO, novo)
+          if (novoPapel) localStorage.setItem(CHAVE_PAPEL_DESEJADO, novoPapel)
           else localStorage.removeItem(CHAVE_PAPEL_DESEJADO)
+          if (novoPapel === 'vendedor' && novoGrupo) {
+            localStorage.setItem(CHAVE_GRUPO_DESEJADO, novoGrupo)
+          } else {
+            localStorage.removeItem(CHAVE_GRUPO_DESEJADO)
+          }
         } catch {
           // navegador sem armazenamento: vale só nesta sessão
         }
@@ -228,6 +256,9 @@ export function ProvedorSessao({ children }) {
       }) {
         definirLembrarLogin(lembrar)
         setProcessando(true)
+        // garante que carregarAcesso(), logo abaixo, resolva pro grupo certo
+        // mesmo que a tela não tenha chamado escolherPorta antes
+        setGrupoDesejado(grupo)
         try {
           const limpo = String(email).trim().toLowerCase()
           const { error } = await supabase.auth.signUp({ email: limpo, password: senha })
@@ -286,7 +317,7 @@ export function ProvedorSessao({ children }) {
           }
 
           try {
-            await vincularVendedor()
+            await vincularVendedor(grupoDesejado)
           } catch (e) {
             await supabase.auth.signOut()
             return { ok: false, erro: e.message }
@@ -303,7 +334,7 @@ export function ProvedorSessao({ children }) {
       async tentarVincular() {
         setProcessando(true)
         try {
-          await vincularVendedor()
+          await vincularVendedor(grupoDesejado)
           setAcesso(await carregarAcesso())
           return { ok: true, erro: '' }
         } catch (e) {
@@ -348,8 +379,10 @@ export function ProvedorSessao({ children }) {
         setAcesso(SEM_ACESSO)
         setRecuperandoSenha(false)
         setPapelDesejado(null)
+        setGrupoDesejado(null)
         try {
           localStorage.removeItem(CHAVE_PAPEL_DESEJADO)
+          localStorage.removeItem(CHAVE_GRUPO_DESEJADO)
         } catch {
           // navegador sem armazenamento: vale só nesta sessão
         }
@@ -362,6 +395,7 @@ export function ProvedorSessao({ children }) {
       processando,
       recuperandoSenha,
       papelDesejado,
+      grupoDesejado,
       carregarAcesso,
       eDev,
       grupoAtivo,

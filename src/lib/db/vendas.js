@@ -71,17 +71,21 @@ export async function atualizarStatusVenda(id, status) {
  * anexa o comprovante que faltava. Atualiza TODAS as rifas do lote de uma
  * vez, porque elas compartilham o mesmo status e comprovante — foram
  * registradas juntas, na mesma compra.
+ *
+ * Vai por função (`completar_minha_venda`), não por `update` direto como
+ * antes: um update direto depende da policy de RLS `vendedor_id =
+ * meu_vendedor_id()`, que não recebe parâmetro — ambíguo pra quem é
+ * vendedor(a) em mais de um grupo com o mesmo e-mail. "grupo" desambigua.
  */
-export async function completarLote(loteId, { status, comprovantePath }) {
-  const mudancas = {}
-  if (status !== undefined) mudancas.status = status
-  if (comprovantePath !== undefined) mudancas.comprovante_path = comprovantePath
-
-  const linhas = verificar(
-    await supabase.from('vendas').update(mudancas).eq('lote_id', loteId).select(),
-    'Não foi possível salvar as alterações desta compra.'
-  )
-  return linhas.map(mapearVenda)
+export async function completarLote(loteId, { status, comprovantePath }, grupo) {
+  const { data, error } = await supabase.rpc('completar_minha_venda', {
+    p_lote_id: loteId,
+    p_status: status ?? null,
+    p_comprovante_path: comprovantePath ?? null,
+    p_grupo: grupo || null,
+  })
+  if (error) throw new Error(traduzirErro(error, 'Não foi possível salvar as alterações desta compra.'))
+  return (data || []).map(mapearVenda)
 }
 
 export async function atualizarRepasseVenda(id, repasse) {

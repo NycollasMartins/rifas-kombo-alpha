@@ -167,7 +167,8 @@ Devem aparecer dez: `codigos_acesso`, `config`, `integracao_webhook`,
 -- (marque "Auto Confirm User")
 insert into public.perfis (usuario_id, nome, papel, grupo)
 select id, 'Dev', 'dev', null from auth.users where email = 'voce@email.com'
-on conflict (usuario_id, papel) do update set grupo = null;
+on conflict (usuario_id, papel) where papel in ('dev', 'lider')
+do update set grupo = null;
 
 select public.definir_codigo_de_lider('Alpha', 'troque-esta-palavra');
 select public.definir_codigo_de_lider('Kombo', 'troque-esta-tambem');
@@ -220,8 +221,8 @@ seguir). Resumo das tabelas:
 |---|---|
 | `config` | preço da rifa, meta padrão, prazo, prêmio — uma linha por grupo. Inclui `preco_rifa_chale`/`meta_chale`, usados só pelo Kombo (ver [chalé x quarto](#preço-por-destino-chalé-x-quarto--só-kombo)) |
 | `codigos_acesso` | hash dos códigos de liderança e de autocadastro — nunca legível, só comparável por função |
-| `vendedores` | cadastro, `situacao` (`ativo` / `quitou` / `desistiu`), `tipo` (`adolescente` / `voluntario`), `destino` (`quarto` / `chale`, só Kombo) |
-| `perfis` | o papel de cada conta logada (`dev` / `lider` / `vendedor`) e o `vendedor_id` quando for vendedor. Uma conta (`usuario_id`) pode ter **duas linhas** — uma de líder, uma de vendedor — ver [Login único](#login-único-líder-e-vendedor-com-o-mesmo-e-mail) |
+| `vendedores` | cadastro, `situacao` (`ativo` / `quitou` / `desistiu`), `tipo` (`adolescente` / `voluntario`), `destino` (`quarto` / `chale`, só Kombo). `email` é único **por grupo**, não no sistema inteiro — o mesmo e-mail pode ter um cadastro no Alpha e outro no Kombo |
+| `perfis` | o papel de cada conta logada (`dev` / `lider` / `vendedor`) e o `vendedor_id` quando for vendedor. Uma conta (`usuario_id`) pode ter **até três linhas** — líder, vendedor Alpha, vendedor Kombo — ver [Login único](#login-único-líder-e-vendedor-e-vendedora-nos-dois-grupos) |
 | `vendedores_privado` | observações e termo assinado — líder vê, vendedor não vê nem o próprio |
 | `vendas` | cada rifa vendida, com `status` (pago/pendente) e `repasse` (pendente/entregue/confirmado) |
 | `integracao_webhook` | URL e segredo do aviso automático pro outro sistema — ver [Integração por webhook](#integração-por-webhook) |
@@ -252,10 +253,12 @@ que precisam de lógica (cadastro, fechamento de meta, etc.) são funções
 `SECURITY DEFINER` chamadas via `.rpc(...)`, nunca `insert`/`update` direto
 numa tabela sensível pelo cliente.
 
-Essas funções helper aceitam um parâmetro opcional `p_papel_desejado` (`'lider'`
-ou `'vendedor'`) — toda policy de RLS continua chamando sem argumento (o
-default cuida disso), só o front-end usa pra desambiguar quando a mesma conta
-tem os dois papéis. Ver [Login único](#login-único-líder-e-vendedor-com-o-mesmo-e-mail).
+Essas funções helper aceitam dois parâmetros opcionais, `p_papel_desejado`
+(`'lider'` ou `'vendedor'`) e `p_grupo_desejado` (`'Alpha'` ou `'Kombo'`,
+só importa quando o papel é vendedor) — toda policy de RLS continua
+chamando sem argumento (o default cuida disso), só o front-end usa pra
+desambiguar quando a mesma conta tem mais de uma identidade. Ver [Login
+único](#login-único-líder-e-vendedor-e-vendedora-nos-dois-grupos).
 
 **Numeração das rifas:** cada grupo tem sequência independente começando em
 `#001`. O número de uma venda nova é sempre o **menor número livre** daquele
@@ -407,30 +410,70 @@ relatado por vendedores do Alpha e do Kombo). Resolvido com um estado
 cadastro/vínculo que você adicionar precisa passar por esse mesmo
 `processando`, senão o bug volta.
 
-### Login único: líder e vendedor com o mesmo e-mail
+### Login único: líder e vendedor, e vendedor(a) nos dois grupos
 
-A mesma pessoa pode ser líder **e** vendedor(a) do mesmo grupo, usando o
-mesmo e-mail e a mesma senha — não é um painel unificado, ela sai de um papel
-e entra no outro. Fica assim porque a tabela `perfis` deixou de ter `id`
-igual ao `auth.users.id`: `id` virou uma chave própria e `usuario_id` aponta
-pra conta de login, com `unique (usuario_id, papel)` — uma conta pode ter uma
-linha de líder e uma de vendedor, nunca duas do mesmo papel.
+A mesma pessoa pode usar **um só e-mail e senha** pra: ser líder e
+vendedor(a) do mesmo grupo, **e/ou** ser vendedor(a) do Alpha e do Kombo ao
+mesmo tempo — três identidades possíveis na mesma conta (líder, vendedor
+Alpha, vendedor Kombo), cada uma com os próprios dados (meta, vendas,
+situação). Não é um painel unificado: a pessoa sai de uma identidade e entra
+na outra.
 
-Quando a conta só tem um papel, nada muda. Quando tem os dois, é a porta de
-entrada que desambigua: `TelaEntrada.jsx` → "Sou líder" / "Sou vendedor(a)" →
-`escolherPorta()` em `useSessao.jsx`, que grava `papelDesejado` (também no
-`localStorage`, mesmo padrão do `grupoDoDev`) e repassa isso pra todo RPC de
-"quem sou eu" (`meuPapel`, `meuGrupo`, `meuVendedorId`,
-`podeCorrigirVenda` em `lib/db/entrada.js` → `p_papel_desejado` no banco).
-Sem esse parâmetro (toda policy de RLS chama assim, sem argumento), o banco
-prefere a linha de líder/dev — é por isso que nenhuma policy precisou mudar.
+Isso existe porque a tabela `perfis` deixou de ter `id` igual ao
+`auth.users.id` (`id` virou chave própria, `usuario_id` aponta pra conta de
+login), e a trava de "um perfil por papel" virou **dois índices únicos
+parciais**: `perfis_dev_lider_unico` (no máximo um dev/líder por conta, sem
+mudança) e `perfis_vendedor_por_grupo_unico` (no máximo um vendedor **por
+grupo** por conta — permite um de cada). Pelo mesmo motivo,
+`vendedores.email` deixou de ser único no sistema inteiro e virou único
+**por grupo** (`vendedores_grupo_email_unico`).
 
-Ao sair (`sair()` em `useSessao.jsx`), `papelDesejado` é limpo — a pessoa
-volta pra tela de escolha, não fica "lembrada" no papel anterior.
+Quando a conta só tem uma identidade, nada muda. Quando tem mais de uma, é
+a porta de entrada que desambigua: `TelaEntrada.jsx` → "Sou líder" / "Sou
+vendedor(a)" → `escolherPorta(papel, grupo)` em `useSessao.jsx`, que grava
+`papelDesejado` **e** `grupoDesejado` (os dois também no `localStorage`,
+mesmo padrão do `grupoDoDev`) e repassa isso pra todo RPC de "quem sou eu"
+(`meuPapel`, `meuGrupo`, `meuVendedorId`, `podeCorrigirVenda` em
+`lib/db/entrada.js` → `p_papel_desejado`/`p_grupo_desejado` no banco).
+`grupoDesejado` só importa quando o papel é vendedor — pra líder o grupo já
+vem fixo no próprio perfil. Sem esses parâmetros (toda policy de RLS chama
+assim, sem argumento), o banco prefere a linha de líder/dev e, entre
+vendedores, a de menor nome de grupo — é por isso que nenhuma policy
+precisou mudar. Em `TelaVendedorEntrada.jsx`, por causa disso, o seletor de
+grupo passou a aparecer em **todo** modo (entrar, primeiro acesso,
+cadastro), não só no cadastro — é a única fricção nova, necessária pra
+saber qual das contas de vendedor usar.
 
-**Limite assumido:** o desenho cobre líder + vendedor **do mesmo grupo**. Ser
-líder de um grupo e vendedor de outro ao mesmo tempo não foi pedido e não
-está coberto (os helpers sem pista explícita preferem a linha de líder).
+**Caso achado na revisão que valia a pena consertar junto:** um `update`
+direto na tabela `vendas` (como fazia `completarCompra`, o vendedor
+anexando o próprio comprovante) depende da policy de RLS `vendedor_id =
+meu_vendedor_id()` — e uma policy de RLS não recebe parâmetro nenhum do
+cliente, então não tem como saber "de qual grupo" nesse update direto. Virou
+a função `completar_minha_venda(p_lote_id, p_status, p_comprovante_path,
+p_grupo)`, que resolve a conta certa internamente — mesmo motivo de
+`registrar_venda` já ser função e não `insert` direto. `assinar_termo`
+ganhou o mesmo `p_grupo` pelo mesmo motivo.
+
+Ao sair (`sair()` em `useSessao.jsx`), `papelDesejado` e `grupoDesejado` são
+limpos — a pessoa volta pra tela de escolha, não fica "lembrada".
+
+**Limite assumido:** cobre líder + vendedor do mesmo grupo, e vendedor nos
+dois grupos. Ser **líder** de dois grupos ao mesmo tempo não foi pedido e
+não está coberto (`registrar_lider` continua travando uma única linha de
+líder por conta, sem olhar o grupo).
+
+### Trocar de conta sem redigitar e-mail e senha
+
+Pedido do usuário, resolvido **sem guardar senha em lugar nenhum do nosso
+código** (ele foi explícito: "seguro pra todo mundo, sem vazar e-mail nem
+senha") — a troca é por conta do **gerenciador de senha do próprio
+navegador**, que já criptografa isso no sistema operacional do aparelho e já
+sabe lembrar mais de uma conta por site. A única mudança foi o campo de
+e-mail dos formulários de entrada (`TelaLider.jsx`, `TelaVendedorEntrada.jsx`)
+usar `autoComplete="username"` em vez de `"email"` — o token que os
+gerenciadores de senha reconhecem de verdade como campo de login, pra
+oferecer a lista de contas salvas ao tocar nele. Nenhum estado, tela ou
+arquivo novo pra isso.
 
 ### Preço por destino (chalé x quarto) — só Kombo
 

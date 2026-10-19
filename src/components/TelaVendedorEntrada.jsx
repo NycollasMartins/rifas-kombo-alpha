@@ -13,7 +13,8 @@ import { rotuloDoTipo, KOMBO } from '../utils/grupos'
  * continuar sabendo quem entrou.
  */
 export default function TelaVendedorEntrada({ aoVoltar }) {
-  const { entrar, criarSenhaDeVendedor, cadastrarVendedor, pedirRecuperacaoDeSenha } = useSessao()
+  const { entrar, criarSenhaDeVendedor, cadastrarVendedor, pedirRecuperacaoDeSenha, escolherPorta } =
+    useSessao()
 
   const [modo, setModo] = useState('entrar') // entrar | primeiro | cadastro | esqueci
   const [email, setEmail] = useState('')
@@ -52,11 +53,16 @@ export default function TelaVendedorEntrada({ aoVoltar }) {
     }
 
     if (!senha) return setErro('Digite a sua senha.')
+    if (!grupo) return setErro('Escolha se você é do Alpha ou do Kombo.')
+
+    // guarda a escolha na sessão antes de qualquer chamada — é o que
+    // desambigua qual conta de vendedor usar quando o mesmo e-mail é
+    // vendedor(a) nos dois grupos
+    escolherPorta('vendedor', grupo)
 
     if (modo === 'cadastro') {
       if (!nome.trim()) return setErro('Digite o seu nome.')
       if (!telefone.trim()) return setErro('Digite o seu telefone.')
-      if (!grupo) return setErro('Escolha se você é do Alpha ou do Kombo.')
       if (senha.length < 6) return setErro('A senha precisa ter pelo menos 6 caracteres.')
       if (!codigo.trim()) return setErro('Digite o código do grupo.')
 
@@ -111,6 +117,17 @@ export default function TelaVendedorEntrada({ aoVoltar }) {
         {erro && <p className="error-text">{erro}</p>}
         {recado && <p className="error-text" style={{ color: 'var(--good)' }}>{recado}</p>}
 
+        {modo !== 'esqueci' && (
+          <>
+            <label className="rotulo-solto">Você é vendedor(a) de qual grupo?</label>
+            <SeletorDeGrupo valor={grupo} aoEscolher={setGrupo} desabilitado={ocupado} />
+            <p className="texto-ajuda" style={{ marginTop: -8, marginBottom: 16 }}>
+              Pode ser vendedor(a) dos dois — se já usa este e-mail no outro grupo, escolha aqui
+              qual conta quer usar agora.
+            </p>
+          </>
+        )}
+
         {modo === 'cadastro' && (
           <>
             <div className="field">
@@ -133,8 +150,6 @@ export default function TelaVendedorEntrada({ aoVoltar }) {
                 onChange={(e) => setTelefone(e.target.value)}
               />
             </div>
-            <label className="rotulo-solto">Você é de qual grupo?</label>
-            <SeletorDeGrupo valor={grupo} aoEscolher={setGrupo} desabilitado={ocupado} />
             <div className="field">
               <label htmlFor="vend-tipo">Vai ao acampamento como</label>
               <select id="vend-tipo" value={tipo} onChange={(e) => setTipo(e.target.value)}>
@@ -159,7 +174,7 @@ export default function TelaVendedorEntrada({ aoVoltar }) {
           <input
             id="vend-email"
             type="email"
-            autoComplete="email"
+            autoComplete="username"
             inputMode="email"
             placeholder="voce@email.com"
             value={email}
