@@ -4,7 +4,7 @@ import PainelTermo from './PainelTermo'
 import BotoesDoWhatsapp from './BotoesDoWhatsapp'
 import { useDadosRifa } from '../hooks/useDadosRifa'
 import { useSessao } from '../hooks/useSessao'
-import { infoDoGrupo, rotuloDoTipo, KOMBO } from '../utils/grupos'
+import { ALPHA, infoDoGrupo, rotuloDoTipo, KOMBO } from '../utils/grupos'
 import { montarMensagemDeAcesso, montarMensagemDoTermo } from '../utils/whatsapp'
 import { metaDoVendedor, precoDoVendedor } from '../utils/calculos'
 import { traduzirErro } from '../lib/db/erros'
@@ -141,6 +141,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
             nome: vendedorCriado.nome,
             email: vendedorCriado.email,
             link: window.location.origin,
+            grupo,
           })}
           aoEnviar={() => marcarAcessoEnviado(vendedorCriado.id)}
         />
@@ -305,7 +306,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
             <p className="texto-ajuda" style={{ margin: '0 0 8px' }}>
               {acessoEm
                 ? `Mensagem enviada em ${formatarDataHora(acessoEm)}. Dá pra reenviar.`
-                : 'A mensagem com o link, como instalar e o grupo ainda não foi enviada.'}
+                : `A mensagem com o link e como instalar${grupo === ALPHA ? ' (e o grupo do WhatsApp)' : ''} ainda não foi enviada.`}
             </p>
             <BotoesDoWhatsapp
               telefone={telefone}
@@ -313,6 +314,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
                 nome,
                 email,
                 link: window.location.origin,
+                grupo,
               })}
               rotulo={acessoEm ? 'Reenviar no WhatsApp' : 'Enviar no WhatsApp'}
               aoEnviar={() => marcarAcessoEnviado(vendedor.id)}

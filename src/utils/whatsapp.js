@@ -7,7 +7,7 @@
  */
 
 import { formatarMoeda, formatarNumeroRifa } from './formato'
-import { infoDoGrupo } from './grupos'
+import { ALPHA, infoDoGrupo } from './grupos'
 import { formatarPrazo } from './prazo'
 
 /**
@@ -118,14 +118,19 @@ export function montarMensagemDoTermo({ nome, grupo, precoRifa, meta, prazoFinal
   return linhas.join('\n')
 }
 
-const LINK_DO_GRUPO =
-  'https://chat.whatsapp.com/FedzhZwIGK43s7dxhkBaz5?s=cl&p=i&mlu=4&ilr=4'
+// Só o Alpha tem grupo de WhatsApp pronto até agora — o Kombo KB ainda não
+// tem o link. Se um dia tiver, troca esse objeto (nunca bota o link direto
+// no texto, pra não esquecer de tirar de novo quando um grupo não tiver).
+const LINKS_DE_GRUPO = {
+  [ALPHA]: 'https://chat.whatsapp.com/FedzhZwIGK43s7dxhkBaz5?s=cl&p=i&mlu=4&ilr=4',
+}
 
-/** Texto com o link do app, como instalar, o primeiro acesso e o grupo das rifas. */
-export function montarMensagemDeAcesso({ nome, email, link }) {
+/** Texto com o link do app, como instalar, o primeiro acesso e o grupo das rifas (se tiver). */
+export function montarMensagemDeAcesso({ nome, email, link, grupo }) {
   const primeiroNome = String(nome || '').trim().split(/\s+/)[0] || 'Olá'
+  const linkDoGrupo = LINKS_DE_GRUPO[grupo]
 
-  return [
+  const linhas = [
     `Oi, ${primeiroNome}! 🔥`,
     '',
     'Já dá pra acompanhar suas rifas do acampamento pelo celular:',
@@ -138,10 +143,13 @@ export function montarMensagemDeAcesso({ nome, email, link }) {
     '',
     '🔑 Primeiro acesso:',
     `Toque em "Sou vendedor(a) → É meu primeiro acesso", digite o e-mail ${email} e crie uma senha. Nas próximas vezes é só entrar com esse e-mail e senha.`,
-    '',
-    '👥 Entre no grupo das rifas:',
-    LINK_DO_GRUPO,
-  ].join('\n')
+  ]
+
+  if (linkDoGrupo) {
+    linhas.push('', '👥 Entre no grupo das rifas:', linkDoGrupo)
+  }
+
+  return linhas.join('\n')
 }
 
 /** Endereço que abre o WhatsApp com a mensagem pronta. */
