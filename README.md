@@ -248,10 +248,15 @@ Cada linha é uma policy de RLS ou uma checagem dentro de uma função
 
 **Modelo de segurança (RLS):** toda tabela tem Row Level Security ligado.
 Funções helper (`meu_papel()`, `meu_grupo()`, `e_dev()`, `e_lider()`,
-`posso_ver(grupo)`) decidem visibilidade; políticas usam essas funções. Fluxos
-que precisam de lógica (cadastro, fechamento de meta, etc.) são funções
-`SECURITY DEFINER` chamadas via `.rpc(...)`, nunca `insert`/`update` direto
-numa tabela sensível pelo cliente.
+`posso_ver(grupo)`, `tenho_perfil_no_grupo(grupo)`, `e_meu_vendedor(id)`)
+decidem visibilidade; políticas usam essas funções. Fluxos que precisam de
+lógica (cadastro, fechamento de meta, etc.) são funções `SECURITY DEFINER`
+chamadas via `.rpc(...)`, nunca `insert`/`update` direto numa tabela
+sensível pelo cliente. `posso_ver`/`meu_grupo`/`meu_vendedor_id` são
+ambíguos pra quem é vendedor(a) em mais de um grupo (ver [Login
+único](#login-único-líder-e-vendedor-e-vendedora-nos-dois-grupos)) —
+`tenho_perfil_no_grupo`/`e_meu_vendedor` resolvem isso pra policies de
+`select` e de "é meu", sem precisar de pista nenhuma do cliente.
 
 Essas funções helper aceitam dois parâmetros opcionais, `p_papel_desejado`
 (`'lider'` ou `'vendedor'`) e `p_grupo_desejado` (`'Alpha'` ou `'Kombo'`,
@@ -461,6 +466,39 @@ limpos — a pessoa volta pra tela de escolha, não fica "lembrada".
 dois grupos. Ser **líder** de dois grupos ao mesmo tempo não foi pedido e
 não está coberto (`registrar_lider` continua travando uma única linha de
 líder por conta, sem olhar o grupo).
+
+**Bug real encontrado depois de publicado, com causa e correção importantes
+de registrar:** vendedor(a) nos dois grupos conseguia logar e o app dizia
+"você é vendedor(a) do Kombo" certinho, mas a tela de vendas aparecia como
+se o cadastro tivesse sumido ("seu cadastro não está mais na lista do
+grupo"). A causa: **uma política de RLS não recebe parâmetro nenhum do
+cliente** — só uma função RPC recebe. `posso_ver(grupo)` (usada pelas
+policies de `select` de `vendedores`, `vendas`, `sorteios` e `config`) chama
+`meu_grupo()` **sem nenhuma pista**, e sem pista, pra quem tem duas linhas
+de vendedor, o banco sempre escolhe a mesma (a de grupo com nome
+alfabeticamente menor — Alpha antes de Kombo) — não importa qual conta a
+pessoa escolheu usar na tela. Um vendedor dual nunca conseguia ver (nem
+registrar venda) no grupo "perdedor" dessa ordenação alfabética.
+
+**Correção:** duas funções novas que não dependem de pista nenhuma, porque
+checam a tabela `perfis` direto em vez de confiar no `meu_grupo()` ambíguo:
+- `tenho_perfil_no_grupo(p_grupo)` — "tenho QUALQUER perfil (líder ou
+  vendedor) nesse grupo?" — substituiu `posso_ver(grupo)` nas quatro
+  policies de `select` acima (e na policy de storage dos comprovantes).
+- `e_meu_vendedor(p_vendedor_id)` — "esse vendedor_id é de alguma das MINHAS
+  contas de vendedor, em qualquer grupo?" — substituiu o `vendedor_id =
+  meu_vendedor_id()` ambíguo na policy "vendas: o vendedor completa a
+  própria", na de `inscricoes_push`, e na checagem de dono dentro de
+  `registrar_venda()` (que bloqueava até registrar uma venda nova no
+  segundo grupo).
+
+**A lição pra não repetir:** qualquer `policy`/função nova que precise saber
+"esse grupo é meu?" ou "esse vendedor sou eu?" tem que usar
+`tenho_perfil_no_grupo`/`e_meu_vendedor` (ou receber `p_grupo` explícito,
+como `registrar_venda`/`completar_minha_venda`/`assinar_termo` já fazem) —
+nunca comparar contra `meu_grupo()`/`meu_vendedor_id()` chamados sem pista,
+porque isso volta a quebrar silenciosamente pra quem é vendedor(a) nos dois
+grupos.
 
 ### Trocar de conta sem redigitar e-mail e senha
 

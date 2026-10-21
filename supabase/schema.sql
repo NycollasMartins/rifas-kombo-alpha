@@ -461,6 +461,34 @@ returns boolean language sql stable security definer set search_path = public as
   select public.e_dev() or p_grupo = public.meu_grupo()
 $$;
 
+/**
+ * Pra políticas de SELECT em tabela grupo-a-grupo (config/vendedores/vendas/
+ * sorteios): `posso_ver()` usa `meu_grupo()` sem pista nenhuma — e uma
+ * consulta direta numa tabela (diferente de uma função RPC) não tem como
+ * mandar pista nenhuma pro banco. Pra quem só tem um grupo isso nunca foi
+ * problema; mas pra quem é vendedor(a) nos dois grupos (login único), a
+ * escolha sem pista sempre cai no mesmo grupo (o primeiro em ordem
+ * alfabética) — a pessoa nunca enxergaria os dados do outro grupo, não
+ * importa qual conta escolheu usar. Esta função resolve isso checando se
+ * existe QUALQUER perfil (líder ou vendedor) da conta naquele grupo — cobre
+ * as duas contas de quem é dual, sem precisar de pista nenhuma.
+ */
+create or replace function public.tenho_perfil_no_grupo(p_grupo text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.e_dev() or exists (
+    select 1 from public.perfis where usuario_id = auth.uid() and grupo = p_grupo
+  )
+$$;
+
+/** É algum dos MEUS cadastros de vendedor (qualquer grupo) — mesmo motivo da função acima. */
+create or replace function public.e_meu_vendedor(p_vendedor_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.perfis
+     where usuario_id = auth.uid() and papel = 'vendedor' and vendedor_id = p_vendedor_id
+  )
+$$;
+
 -- ============================================================================
 --  4. ENTRADA: criar conta de líder, vincular vendedor
 -- ============================================================================
@@ -831,7 +859,7 @@ begin
     raise exception 'Vendedor não encontrado.';
   end if;
 
-  if v_vendedor_id <> coalesce(public.meu_vendedor_id(), '00000000-0000-0000-0000-000000000000'::uuid)
+  if not public.e_meu_vendedor(v_vendedor_id)
      and not (public.e_lider() and public.posso_ver(v_vendedor.grupo)) then
     raise exception 'Você só pode registrar as suas próprias vendas.';
   end if;
@@ -1289,7 +1317,7 @@ alter table public.integracao_webhook_log enable row level security;
 drop policy if exists "config: só o meu grupo" on public.config;
 create policy "config: só o meu grupo"
   on public.config for select to authenticated
-  using (public.posso_ver(grupo));
+  using (public.tenho_perfil_no_grupo(grupo));
 
 drop policy if exists "config: só a liderança altera" on public.config;
 create policy "config: só a liderança altera"
@@ -1319,7 +1347,7 @@ create policy "perfis: só o dev gerencia"
 drop policy if exists "vendedores: só o meu grupo" on public.vendedores;
 create policy "vendedores: só o meu grupo"
   on public.vendedores for select to authenticated
-  using (public.posso_ver(grupo));
+  using (public.tenho_perfil_no_grupo(grupo));
 
 drop policy if exists "vendedores: a liderança cadastra" on public.vendedores;
 create policy "vendedores: a liderança cadastra"
@@ -1357,7 +1385,7 @@ create policy "privado: só a liderança do grupo"
 drop policy if exists "vendas: só o meu grupo" on public.vendas;
 create policy "vendas: só o meu grupo"
   on public.vendas for select to authenticated
-  using (public.posso_ver(grupo));
+  using (public.tenho_perfil_no_grupo(grupo));
 
 -- inserir é sempre pela função registrar_venda(), nunca direto
 drop policy if exists "vendas: a liderança edita" on public.vendas;
@@ -1377,8 +1405,8 @@ create policy "vendas: a liderança edita"
 drop policy if exists "vendas: o vendedor completa a própria" on public.vendas;
 create policy "vendas: o vendedor completa a própria"
   on public.vendas for update to authenticated
-  using (vendedor_id = public.meu_vendedor_id() and repasse = 'pendente')
-  with check (vendedor_id = public.meu_vendedor_id());
+  using (public.e_meu_vendedor(vendedor_id) and repasse = 'pendente')
+  with check (public.e_meu_vendedor(vendedor_id));
 
 drop policy if exists "vendas: a liderança exclui" on public.vendas;
 create policy "vendas: a liderança exclui"
@@ -1390,14 +1418,14 @@ create policy "vendas: a liderança exclui"
 drop policy if exists "push: o vendedor cuida da própria" on public.inscricoes_push;
 create policy "push: o vendedor cuida da própria"
   on public.inscricoes_push for all to authenticated
-  using (vendedor_id = public.meu_vendedor_id())
-  with check (vendedor_id = public.meu_vendedor_id());
+  using (public.e_meu_vendedor(vendedor_id))
+  with check (public.e_meu_vendedor(vendedor_id));
 
 -- ---- sorteios ---------------------------------------------------------------
 drop policy if exists "sorteios: só o meu grupo" on public.sorteios;
 create policy "sorteios: só o meu grupo"
   on public.sorteios for select to authenticated
-  using (public.posso_ver(grupo));
+  using (public.tenho_perfil_no_grupo(grupo));
 
 drop policy if exists "sorteios: a liderança sorteia" on public.sorteios;
 create policy "sorteios: a liderança sorteia"
@@ -1532,11 +1560,11 @@ begin
     on storage.objects for all to authenticated
     using (
       bucket_id = 'comprovantes'
-      and public.posso_ver((storage.foldername(name))[1])
+      and public.tenho_perfil_no_grupo((storage.foldername(name))[1])
     )
     with check (
       bucket_id = 'comprovantes'
-      and public.posso_ver((storage.foldername(name))[1])
+      and public.tenho_perfil_no_grupo((storage.foldername(name))[1])
     )$p$;
 
 exception when others then
