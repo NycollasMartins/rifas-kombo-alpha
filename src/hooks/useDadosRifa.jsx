@@ -46,7 +46,7 @@ function mesclar(lista, item) {
 const remover = (lista, id) => lista.filter((i) => i.id !== id)
 
 export function ProvedorDadosRifa({ children }) {
-  const { temAcesso, grupo, vendedorId, eLider } = useSessao()
+  const { temAcesso, grupo, vendedorId, eLider, eDev } = useSessao()
 
   // Guardamos tudo que o banco devolveu. Para líder e vendedor isso já é só o
   // grupo deles; para o dev vêm os dois, e o filtro por grupoAtivo acontece
@@ -60,6 +60,18 @@ export function ProvedorDadosRifa({ children }) {
   const [erroCarregamento, setErroCarregamento] = useState('')
 
   const jaCarregou = useRef(false)
+
+  // Quem trocou de identidade sem fechar o app (ex: saiu do Alpha e entrou
+  // como vendedor(a) do Kombo, mesma conta) — useSessao já sabe o papel/grupo
+  // novo antes dessa busca terminar. Sem isso, sobra uma fração de segundo
+  // em que a tela já mostra "você é vendedor(a)", mas `todosVendedores`
+  // ainda é da identidade ANTERIOR — "meuCadastro" não bate com nada na
+  // lista velha, e aparece "seu cadastro não está mais na lista" por engano.
+  // Não vale pro dev: ele já carrega os dois grupos numa tabela só e só
+  // reescolhe qual olhar (trocarDeGrupo), sem precisar buscar de novo.
+  const identidadeAtualRef = useRef(null)
+  identidadeAtualRef.current = eDev ? null : `${grupo || ''}:${vendedorId || ''}`
+  const [identidadeCarregada, setIdentidadeCarregada] = useState(null)
 
   const carregarTudo = useCallback(
     async ({ silencioso = false } = {}) => {
@@ -82,6 +94,7 @@ export function ProvedorDadosRifa({ children }) {
         setTodosSorteios(srt)
         setDadosPrivados(priv)
         setErroCarregamento('')
+        setIdentidadeCarregada(identidadeAtualRef.current)
         jaCarregou.current = true
       } catch (erro) {
         if (!jaCarregou.current) {
@@ -97,6 +110,14 @@ export function ProvedorDadosRifa({ children }) {
   useEffect(() => {
     carregarTudo()
   }, [carregarTudo])
+
+  // Corrige já nesta renderização (não espera um efeito) se a identidade
+  // mudou e os dados carregados ainda são da anterior.
+  const aindaNaoBateComAIdentidade =
+    temAcesso && !eDev && identidadeAtualRef.current !== identidadeCarregada
+  if (aindaNaoBateComAIdentidade && !carregando) {
+    setCarregando(true)
+  }
 
   // ---- Realtime -----------------------------------------------------------
   useEffect(() => {
