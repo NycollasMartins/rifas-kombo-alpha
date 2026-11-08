@@ -85,6 +85,18 @@ export default function AbaVendedores() {
     })
   }, [doTipo, busca])
 
+  // resumoDoVendedor varre TODA a tabela de vendas pra somar o total de um
+  // vendedor — com milhares de vendas, fazer isso de novo pra cada linha a
+  // cada letra digitada na busca travava a tela. Calcula uma vez só quando
+  // os dados mudam de verdade (não a cada tecla) e olha num mapa depois.
+  const resumosPorId = useMemo(() => {
+    const mapa = new Map()
+    for (const v of vendedores) {
+      mapa.set(v.id, resumoDoVendedor(v, vendas, config))
+    }
+    return mapa
+  }, [vendedores, vendas, config])
+
   async function excluir(vendedor) {
     const quantidade = vendasDoVendedor(vendas, vendedor.id).length
     if (quantidade > 0) {
@@ -223,7 +235,7 @@ export default function AbaVendedores() {
       ) : (
         <div className="card">
           {filtrados.map((vendedor) => {
-            const resumo = resumoDoVendedor(vendedor, vendas, config)
+            const resumo = resumosPorId.get(vendedor.id)
             const temTermo =
               Boolean(dadosPrivados[vendedor.id]?.termoPath) || Boolean(vendedor.termoDigitalEm)
             const podeFechar = vendedor.situacao === 'ativo'
