@@ -16,11 +16,15 @@ import estilos from './AbaVendedores.module.css'
 /**
  * Separa em palavras pra busca "começa com" — sem isso, procurar uma letra
  * batia com qualquer e-mail que tivesse ela em qualquer posição (ex: buscar
- * "b" trazia nomes com "A" só porque o e-mail tinha um "b" no meio).
+ * "b" trazia nomes com "A" só porque o e-mail tinha um "b" no meio). Tira
+ * acento também (José -> jose) — sem isso, digitar sem acento (comum no
+ * celular) não achava ninguém com acento no nome.
  */
 function palavrasDe(texto) {
   return (texto || '')
     .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
     .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean)
 }
