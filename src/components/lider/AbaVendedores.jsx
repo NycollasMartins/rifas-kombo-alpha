@@ -74,11 +74,17 @@ export default function AbaVendedores() {
   const filtrados = useMemo(() => {
     const termo = busca.trim().toLowerCase()
     if (!termo) return doTipo
+    const palavrasDoTermo = palavrasDe(termo)
     const soDigitos = termo.replace(/\D/g, '')
     return doTipo.filter((v) => {
-      const bateuPalavra = [...palavrasDe(v.nome), ...palavrasDe(v.email)].some((p) =>
-        p.startsWith(termo)
-      )
+      const palavrasDoVendedor = [...palavrasDe(v.nome), ...palavrasDe(v.email)]
+      // cada palavra digitada precisa bater com ALGUMA palavra do cadastro —
+      // assim "joão silva" acha "João Pedro Silva", e "silva" sozinho também
+      const bateuPalavra =
+        palavrasDoTermo.length > 0 &&
+        palavrasDoTermo.every((termoPalavra) =>
+          palavrasDoVendedor.some((p) => p.startsWith(termoPalavra))
+        )
       const bateuTelefone =
         soDigitos.length > 0 && (v.telefone || '').replace(/\D/g, '').includes(soDigitos)
       return bateuPalavra || bateuTelefone
