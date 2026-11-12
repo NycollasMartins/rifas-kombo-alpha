@@ -945,8 +945,9 @@ $$;
  * montar o cartão na tela (nunca e-mail/telefone/user_id). O cálculo de
  * total arrecadado e quanto falta fica por conta do front-end, com a MESMA
  * fórmula de sempre (preço x quantidade paga) — aqui só entrega os
- * ingredientes (meta e preço já resolvidos por vendedor, considerando
- * chalé x quarto no Kombo) e as quantidades.
+ * ingredientes (meta e preço já resolvidos por vendedor) e as quantidades.
+ *
+ * Só Alpha, de propósito — o Kombo não entra no apadrinhamento.
  */
 create or replace function public.listar_para_apadrinhar()
 returns table (
@@ -963,17 +964,14 @@ language sql stable security definer set search_path = public as $$
     v.id,
     v.nome,
     v.grupo,
-    coalesce(
-      v.meta,
-      case when v.grupo = 'Kombo' and v.destino = 'chale' then c.meta_chale else c.meta_padrao end
-    ) as meta,
-    case when v.grupo = 'Kombo' and v.destino = 'chale' then c.preco_rifa_chale else c.preco_rifa end as preco,
+    coalesce(v.meta, c.meta_padrao) as meta,
+    c.preco_rifa as preco,
     coalesce((select count(*)::int from public.vendas where vendedor_id = v.id and status = 'pago'), 0),
     coalesce((select count(*)::int from public.vendas where vendedor_id = v.id and status = 'pendente'), 0)
   from public.vendedores v
   join public.config c on c.grupo = v.grupo
-  where v.situacao = 'ativo'
-  order by v.grupo, v.nome
+  where v.situacao = 'ativo' and v.grupo = 'Alpha'
+  order by v.nome
 $$;
 
 /**
@@ -1010,6 +1008,9 @@ begin
   select * into v_vendedor from public.vendedores where id = p_vendedor_id;
   if not found then
     raise exception 'Vendedor não encontrado.';
+  end if;
+  if v_vendedor.grupo <> 'Alpha' then
+    raise exception 'O apadrinhamento é só para o Alpha no momento.';
   end if;
   if v_vendedor.situacao <> 'ativo' then
     raise exception 'Esse vendedor já não precisa mais de apadrinhamento — muito obrigado pelo carinho!';
