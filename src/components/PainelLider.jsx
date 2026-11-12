@@ -4,6 +4,7 @@ import TrocaDeGrupo from './TrocaDeGrupo'
 import AbaPainel from './lider/AbaPainel'
 import AbaVendas from './lider/AbaVendas'
 import AbaVendedores from './lider/AbaVendedores'
+import AbaApadrinhamento from './lider/AbaApadrinhamento'
 import AbaSorteio from './lider/AbaSorteio'
 import AbaUsuarios from './lider/AbaUsuarios'
 import AbaConfiguracoes from './lider/AbaConfiguracoes'
@@ -16,6 +17,7 @@ const ABAS = [
   { chave: 'painel', rotulo: 'Painel', Componente: AbaPainel },
   { chave: 'vendas', rotulo: 'Vendas', Componente: AbaVendas },
   { chave: 'vendedores', rotulo: 'Vendedores', Componente: AbaVendedores },
+  { chave: 'apadrinhamento', rotulo: 'Apadrinhamento', Componente: AbaApadrinhamento },
   { chave: 'sorteio', rotulo: 'Sorteio', Componente: AbaSorteio },
   { chave: 'usuarios', rotulo: 'Usuários', Componente: AbaUsuarios },
   { chave: 'config', rotulo: 'Configurações', Componente: AbaConfiguracoes },
