@@ -749,6 +749,14 @@ trocar direto pelo app depois, dá pra mover pra Configurações.
 'apadrinhamento'` — pra liderança e o próprio vendedor saberem que alguém
 comprou por eles.
 
+**Aba "Apadrinhamento"**, no painel do líder (`lider/AbaApadrinhamento.jsx`):
+lista todas as compras feitas por `/apadrinhar`, agrupadas por compra (mesmo
+padrão de `agruparPorLote` já usado em `ModalVendasDoVendedor.jsx`) — nome
+e telefone de quem apadrinhou, quem foi apadrinhado, quantidade de rifas,
+valor e status, com botão de "Ver comprovante" e de "Confirmar pagamento"
+(marca o lote inteiro como pago de uma vez, já que ele nasce sempre
+`'pendente'`).
+
 ---
 
 ## Convenções e pegadinhas
