@@ -9,9 +9,13 @@
  * tanto faz pra esse formato, desde que seja a chave certa).
  */
 export const PIX_RECEBEDOR = {
-  chave: 'TROCAR_PELA_CHAVE_PIX', // ex: CNPJ só números, ou e-mail, ou telefone com 55+DDD
-  nome: 'TROCAR_PELO_NOME_DO_TITULAR', // até 25 letras, sem acento (o padrão exige)
-  cidade: 'TROCAR_PELA_CIDADE', // até 15 letras, sem acento
+  chave: 'kombochurch@gmail.com',
+  // TODO: confirmar com o usuário o nome EXATO do titular (até 25 letras,
+  // sem acento) e a cidade cadastrada no banco (até 15 letras, sem acento)
+  // — "KOMBO CHURCH"/"BRASILIA" são só um palpite razoável pra já deixar
+  // funcionando; ajuste assim que ele confirmar.
+  nome: 'KOMBO CHURCH',
+  cidade: 'BRASILIA',
 }
 
 /** Tira acento e deixa só o que o padrão aceita (letras, números, espaço). */
