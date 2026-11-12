@@ -10,20 +10,17 @@
  */
 export const PIX_RECEBEDOR = {
   chave: 'kombochurch@gmail.com',
-  // TODO: confirmar com o usuário o nome EXATO do titular (até 25 letras,
-  // sem acento) e a cidade cadastrada no banco (até 15 letras, sem acento)
-  // — "KOMBO CHURCH"/"BRASILIA" são só um palpite razoável pra já deixar
-  // funcionando; ajuste assim que ele confirmar.
-  nome: 'KOMBO CHURCH',
-  cidade: 'BRASILIA',
+  nome: 'IBFT',
+  cidade: 'Brasília', // o acento é tirado na hora de montar o payload
 }
 
-/** Tira acento e deixa só o que o padrão aceita (letras, números, espaço). */
+/** Tira acento, deixa maiúsculo e só o que o padrão aceita (letras, números, espaço). */
 function limpar(texto, tamanhoMaximo) {
   return (texto || '')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/[^A-Za-z0-9 ]/g, '')
+    .toUpperCase()
     .slice(0, tamanhoMaximo)
     .trim()
 }
