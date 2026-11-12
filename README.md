@@ -695,6 +695,60 @@ aperta enviar. Enviar de verdade sem toque exigiria a API oficial da Meta
 (conta business, modelos homologados, custo por mensagem) — fora de escopo
 de propósito.
 
+### Apadrinhamento: formulário público, sem login
+
+`/apadrinhar` (link público, mande direto pra quem quiser ajudar) deixa
+qualquer pessoa escolher um vendedor que ainda não bateu a meta e comprar
+rifas em nome dele via Pix — pensado pra reduzir quem fica sem terminar a
+venda perto do prazo.
+
+**Por que fica dentro do mesmo sistema, e não separado:** uma compra de
+apadrinhamento é, na prática, só mais uma venda atribuída àquele
+vendedor — nascendo no mesmo banco, ela reaproveita de graça a numeração
+por "menor número livre", o "virar quitou" automático e o aviso pro outro
+sistema (`avisar_vendedor_finalizado`), sem precisar sincronizar nada por
+webhook indo e voltando com um sistema externo (que teria o risco real de
+duas pessoas apadrinharem a mesma rifa ao mesmo tempo, por causa do atraso
+da rede).
+
+**Como funciona, tecnicamente:** `src/main.jsx` confere a URL **antes** de
+montar `<App/>` — se começar com `/apadrinhar`, renderiza
+`TelaApadrinhar.jsx` sozinha, **fora** de `ProvedorSessao`/`ProvedorDadosRifa`
+(que pressupõem alguém já logado). Sem biblioteca de rotas — é a única tela
+assim no projeto. Duas funções no banco (seção "6-B" do `schema.sql`) são
+as **únicas** liberadas pro papel `anon` (quem não fez login) em todo o
+sistema:
+- `listar_para_apadrinhar()` — só leitura, nunca devolve e-mail/telefone,
+  só o necessário pra montar o cartão (nome, grupo, meta, preço, quantidade
+  paga/pendente).
+- `registrar_apadrinhamento(...)` — mesmo molde do `registrar_venda()`, sem
+  exigir conta. A venda **sempre** nasce `'pendente'` — não tem gateway de
+  pagamento, então a confirmação continua manual, a liderança conferindo o
+  comprovante, igual já acontece hoje com qualquer Pix. Sem checar "não
+  pode passar do que falta": passar um pouco da meta já é um comportamento
+  aceito (vira oferta pra igreja), então não existe risco de concorrência
+  de "vender a mesma rifa duas vezes".
+
+Nenhuma tabela ganhou política de RLS nova pra `anon` — as duas funções são
+`SECURITY DEFINER` e só devolvem o que elas mesmas decidem, nunca expõem a
+tabela direto. O bucket `comprovantes` ganhou uma política a mais, só de
+`insert`, pra `anon` conseguir enviar o comprovante sem conseguir listar ou
+abrir o de ninguém (isso continua só pra liderança).
+
+**QR Code do Pix** (`utils/pix.js`) é gerado inteiramente no navegador —
+monta o "Pix Copia e Cola" no padrão BR Code/EMV do Banco Central (com
+checksum CRC16), sem gateway de pagamento nem serviço externo nenhum, e
+desenha o QR reaproveitando a biblioteca `qrcode` que já existe no projeto
+(mesma usada em `CartaoQrCode.jsx`). A chave Pix/nome do titular/cidade da
+conta que recebe ficam como constante no topo do arquivo
+(`PIX_RECEBEDOR`) — é informação que se define uma vez só; se precisar
+trocar direto pelo app depois, dá pra mover pra Configurações.
+
+`AbaVendedores.jsx`/`TelaVendedor.jsx` mostram "(X apadrinhadas)" ao lado de
+"(X próprias)" sempre que existir alguma venda com `origem =
+'apadrinhamento'` — pra liderança e o próprio vendedor saberem que alguém
+comprou por eles.
+
 ---
 
 ## Convenções e pegadinhas
