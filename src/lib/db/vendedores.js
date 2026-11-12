@@ -16,6 +16,8 @@ export function mapearVendedor(linha) {
     // preenchido quando a pessoa cria a senha dela no primeiro acesso
     temSenha: Boolean(linha.user_id),
     termoDigitalEm: linha.termo_digital_em || '',
+    // só o "tem ou não tem" — a chave em si fica em vendedores_privado
+    temPix: Boolean(linha.tem_pix),
     acessoEnviadoEm: linha.acesso_enviado_em || '',
     criadoEm: linha.created_at,
   }

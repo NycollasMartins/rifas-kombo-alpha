@@ -2,6 +2,8 @@ import { useState } from 'react'
 import Modal from './Modal'
 import PainelTermo from './PainelTermo'
 import BotoesDoWhatsapp from './BotoesDoWhatsapp'
+import CamposChavePix from './CamposChavePix'
+import { formatarChavePix, normalizarChavePix } from '../utils/chavePix'
 import { useDadosRifa } from '../hooks/useDadosRifa'
 import { useSessao } from '../hooks/useSessao'
 import { ALPHA, infoDoGrupo, rotuloDoTipo, KOMBO } from '../utils/grupos'
@@ -45,6 +47,12 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
   )
   const [situacao, setSituacao] = useState(vendedor?.situacao || 'ativo')
   const [observacao, setObservacao] = useState(privado?.observacao || '')
+  const pixOriginal = {
+    tipo: privado?.pixTipo || 'cpf',
+    chave: formatarChavePix(privado?.pixTipo, privado?.pixChave),
+    titular: privado?.pixTitular || '',
+  }
+  const [pix, setPix] = useState(pixOriginal)
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [vendedorCriado, setVendedorCriado] = useState(null)
@@ -82,6 +90,24 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
       return setErro('Digite o telefone do vendedor — é para onde vai o termo de responsabilidade.')
     }
 
+    // chave Pix: confere antes de salvar qualquer coisa, pra não salvar pela metade
+    const pixMudou =
+      editando &&
+      (pix.tipo !== pixOriginal.tipo ||
+        pix.chave.trim() !== pixOriginal.chave ||
+        pix.titular.trim() !== pixOriginal.titular)
+    let mudancasPix = null
+    if (pixMudou) {
+      if (!pix.chave.trim()) {
+        mudancasPix = { pixChave: '' } // apagou a chave: sai do apadrinhamento
+      } else {
+        const { chave, erro: problema } = normalizarChavePix(pix.tipo, pix.chave)
+        if (problema) return setErro(problema)
+        if (pix.titular.trim().length < 3) return setErro('Digite o nome do titular da conta Pix.')
+        mudancasPix = { pixTipo: pix.tipo, pixChave: chave, pixTitular: pix.titular.trim() }
+      }
+    }
+
     const dados = {
       nome: nome.trim(),
       email: email.trim(),
@@ -96,8 +122,10 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
     try {
       if (editando) {
         await editarVendedor(vendedor.id, { ...dados, situacao })
-        if (observacao !== (privado?.observacao || '')) {
-          await salvarPrivadoDoVendedor(vendedor.id, { observacao })
+        const mudancasPrivadas = { ...mudancasPix }
+        if (observacao !== (privado?.observacao || '')) mudancasPrivadas.observacao = observacao
+        if (Object.keys(mudancasPrivadas).length > 0) {
+          await salvarPrivadoDoVendedor(vendedor.id, mudancasPrivadas)
         }
         aoFechar()
       } else {
@@ -300,6 +328,18 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
               onChange={(e) => setObservacao(e.target.value)}
             />
           </div>
+
+          {grupo === ALPHA && (
+            <div className="field">
+              <label>Chave Pix (onde cai o apadrinhamento)</label>
+              <p className="texto-ajuda" style={{ margin: '0 0 8px' }}>
+                {vendedor.temPix
+                  ? 'Dá pra corrigir aqui se ele(a) cadastrou errado. Apagar a chave tira ele(a) da lista do apadrinhamento.'
+                  : 'Ainda não cadastrou — sem chave, não aparece na lista do apadrinhamento. Ele(a) mesmo pode cadastrar pelo app, ou você preenche aqui.'}
+              </p>
+              <CamposChavePix valor={pix} aoMudar={setPix} prefixoId="vendedor-pix" />
+            </div>
+          )}
 
           <div className="field">
             <label>Acesso ao app</label>

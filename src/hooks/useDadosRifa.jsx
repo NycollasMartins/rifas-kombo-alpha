@@ -21,6 +21,7 @@ import {
 import { listarSorteios, registrarSorteio } from '../lib/db/sorteios'
 import { assinarTermo } from '../lib/db/entrada'
 import { listarDadosPrivados, salvarDadosPrivados } from '../lib/db/vendedoresPrivado'
+import { salvarMinhaChavePix as gravarMinhaChavePix } from '../lib/db/chavePix'
 import { apagarDadosDoGrupo, fecharMetaDoVendedor, transferirVendas } from '../lib/db/fechamento'
 import { traduzirErro } from '../lib/db/erros'
 import { useSessao } from './useSessao'
@@ -217,6 +218,12 @@ export function ProvedorDadosRifa({ children }) {
       async salvarPrivadoDoVendedor(id, dados) {
         const salvo = await salvarDadosPrivados(id, dados)
         setDadosPrivados((a) => ({ ...a, [id]: salvo }))
+        // o banco já atualizou vendedores.tem_pix pelo gatilho; aqui só espelha
+        if (dados.pixChave !== undefined) {
+          setTodosVendedores((a) =>
+            a.map((v) => (v.id === id ? { ...v, temPix: Boolean(salvo.pixChave) } : v))
+          )
+        }
         return salvo
       },
 
@@ -289,6 +296,12 @@ export function ProvedorDadosRifa({ children }) {
             { ...vendedores.find((v) => v.id === vendedorId), termoDigitalEm: new Date().toISOString() }
           )
         )
+      },
+
+      /** O vendedor cadastra ou troca a própria chave Pix. */
+      async salvarMinhaChavePix(dados) {
+        await gravarMinhaChavePix(dados, grupo)
+        setTodosVendedores((a) => a.map((v) => (v.id === vendedorId ? { ...v, temPix: true } : v)))
       },
 
       async salvarSorteio(vendaId) {

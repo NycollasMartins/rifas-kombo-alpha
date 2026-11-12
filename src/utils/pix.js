@@ -4,15 +4,11 @@
  * qualquer banco sabe ler. O QR Code é esse mesmo texto, desenhado pela
  * biblioteca `qrcode` (já usada em CartaoQrCode.jsx).
  *
- * Troque os três valores abaixo pelos dados reais da conta que vai receber
- * (a chave Pix pode ser o CNPJ, telefone, e-mail ou uma chave aleatória —
- * tanto faz pra esse formato, desde que seja a chave certa).
+ * Quem recebe é o próprio vendedor: a chave e o titular vêm do cadastro dele
+ * (vendedores_privado, ver pix_para_apadrinhar no schema.sql). A cidade é
+ * obrigatória no padrão, mas o banco de quem paga não confere — fica fixa.
  */
-export const PIX_RECEBEDOR = {
-  chave: 'kombochurch@gmail.com',
-  nome: 'IBFT',
-  cidade: 'Brasília', // o acento é tirado na hora de montar o payload
-}
+export const PIX_CIDADE = 'Brasília' // o acento é tirado na hora de montar o payload
 
 /** Tira acento, deixa maiúsculo e só o que o padrão aceita (letras, números, espaço). */
 function limpar(texto, tamanhoMaximo) {

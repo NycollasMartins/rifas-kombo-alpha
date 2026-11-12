@@ -3,7 +3,8 @@ import QRCode from 'qrcode'
 import BotaoVoltar from '../BotaoVoltar'
 import { registrarApadrinhamento } from '../../lib/db/apadrinhamento'
 import { enviarComprovante, novoLoteId, validarArquivo } from '../../lib/db/arquivos'
-import { montarPixCopiaECola, PIX_RECEBEDOR } from '../../utils/pix'
+import { buscarPixParaApadrinhar } from '../../lib/db/chavePix'
+import { montarPixCopiaECola, PIX_CIDADE } from '../../utils/pix'
 import { formatarMoeda, formatarNumeroRifa } from '../../utils/formato'
 import { traduzirErro } from '../../lib/db/erros'
 import estilos from './TelaApadrinhar.module.css'
@@ -24,18 +25,37 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
   const inputArquivo = useRef(null)
   const canvasRef = useRef(null)
 
+  // o Pix vai pra conta do próprio vendedor — chave e titular vêm do cadastro dele
+  const [recebedor, setRecebedor] = useState(null)
+  const [erroRecebedor, setErroRecebedor] = useState('')
+
+  useEffect(() => {
+    let ativo = true
+    buscarPixParaApadrinhar(item.vendedorId)
+      .then((r) => ativo && setRecebedor(r))
+      .catch((e) => ativo && setErroRecebedor(e.message))
+    return () => {
+      ativo = false
+    }
+  }, [item.vendedorId])
+
   const total = quantidade * item.preco
   const pix = useMemo(
     () =>
-      montarPixCopiaECola({
-        ...PIX_RECEBEDOR,
-        valor: total,
-        identificador: `RIFA${item.vendedorId.replace(/-/g, '').slice(0, 20)}`,
-      }),
-    [total, item.vendedorId]
+      recebedor
+        ? montarPixCopiaECola({
+            chave: recebedor.chave,
+            nome: recebedor.titular || item.nome,
+            cidade: PIX_CIDADE,
+            valor: total,
+            identificador: `RIFA${item.vendedorId.replace(/-/g, '').slice(0, 20)}`,
+          })
+        : '',
+    [recebedor, total, item.vendedorId, item.nome]
   )
 
   useEffect(() => {
+    if (!pix || !canvasRef.current) return
     QRCode.toCanvas(canvasRef.current, pix, { width: 220, margin: 1 }).catch(() => {})
   }, [pix])
 
@@ -64,6 +84,7 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
   }
 
   async function concluir() {
+    if (!recebedor) return setErro(erroRecebedor || 'Espere o Pix carregar antes de concluir.')
     if (!comprador.trim()) return setErro('Digite o seu nome.')
     setErro('')
     setEnviando(true)
@@ -173,14 +194,26 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
 
         <div className={estilos.pix}>
           <strong>Pague via Pix</strong>
-          <canvas ref={canvasRef} className={estilos.qrcode} />
-          <button type="button" className="btn btn-sm" onClick={copiarPix}>
-            {copiado ? 'Copiado!' : 'Copiar código Pix'}
-          </button>
-          <p className="texto-ajuda" style={{ marginTop: 8 }}>
-            Abra o Pix do seu banco, escolha "Pix Copia e Cola" ou aponte a câmera pro QR Code — o
-            valor de {formatarMoeda(total)} já vem preenchido.
-          </p>
+          {erroRecebedor ? (
+            <p className="error-text">{erroRecebedor}</p>
+          ) : !recebedor ? (
+            <p className="texto-ajuda">Carregando o Pix…</p>
+          ) : (
+            <>
+              <p className="texto-ajuda" style={{ margin: '4px 0 8px' }}>
+                O Pix cai direto na conta de <strong>{recebedor.titular || item.nome}</strong>, que
+                recebe as rifas de {item.nome}.
+              </p>
+              <canvas ref={canvasRef} className={estilos.qrcode} />
+              <button type="button" className="btn btn-sm" onClick={copiarPix}>
+                {copiado ? 'Copiado!' : 'Copiar código Pix'}
+              </button>
+              <p className="texto-ajuda" style={{ marginTop: 8 }}>
+                Abra o Pix do seu banco, escolha "Pix Copia e Cola" ou aponte a câmera pro QR Code —
+                o valor de {formatarMoeda(total)} já vem preenchido.
+              </p>
+            </>
+          )}
         </div>
 
         <div className="field">

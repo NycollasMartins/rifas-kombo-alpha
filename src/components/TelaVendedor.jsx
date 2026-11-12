@@ -6,13 +6,14 @@ import CompraDoVendedor from './CompraDoVendedor'
 import AvisoDePrazo from './AvisoDePrazo'
 import ConviteParaNotificar from './ConviteParaNotificar'
 import ModalAssinarTermo from './ModalAssinarTermo'
+import CartaoChavePix from './CartaoChavePix'
 import ModalNovaVenda from './ModalNovaVenda'
 import { useDadosRifa } from '../hooks/useDadosRifa'
 import { useSessao } from '../hooks/useSessao'
 import { precoDoVendedor, resumoDoVendedor, vendasDoVendedor } from '../utils/calculos'
 import { agruparPorLote } from '../lib/db/vendas'
 import { formatarMoeda } from '../utils/formato'
-import { infoDoGrupo } from '../utils/grupos'
+import { ALPHA, infoDoGrupo } from '../utils/grupos'
 import estilos from './TelaVendedor.module.css'
 
 /** A tela de quem vende: progresso, prazo e as próprias rifas. */
@@ -62,6 +63,9 @@ export default function TelaVendedor() {
           </span>
         </div>
       )}
+
+      {/* a chave Pix é pra onde vai o apadrinhamento — que por enquanto é só do Alpha */}
+      {!saiu && grupo === ALPHA && <CartaoChavePix vendedor={meuCadastro} grupo={grupo} />}
 
       {!saiu && !meuCadastro.termoDigitalEm && (
         <div className={estilos.avisoPrazo}>

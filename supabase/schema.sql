@@ -295,6 +295,42 @@ create table if not exists public.vendedores_privado (
 alter table public.vendedores_privado add column if not exists termo_assinatura text;
 alter table public.vendedores_privado add column if not exists termo_conteudo text;
 
+-- chave Pix onde o vendedor recebe as rifas — é pra ela que vai o dinheiro
+-- do apadrinhamento. Fica aqui (e não em "vendedores") porque "vendedores" é
+-- legível por todo mundo do grupo. O titular é o dono da conta: muito
+-- adolescente recebe na conta do pai ou da mãe.
+alter table public.vendedores_privado add column if not exists pix_tipo text
+  check (pix_tipo in ('cpf', 'cnpj', 'celular', 'email', 'aleatoria'));
+alter table public.vendedores_privado add column if not exists pix_chave text;
+alter table public.vendedores_privado add column if not exists pix_titular text;
+
+-- Confere o formato que o Pix exige (a tela já manda normalizado — isto é a
+-- trava final, valendo também pro líder que grava direto na tabela).
+create or replace function public.chave_pix_valida(p_tipo text, p_chave text)
+returns boolean language sql immutable set search_path = public as $$
+  select case p_tipo
+    when 'cpf'       then p_chave ~ '^[0-9]{11}$'
+    when 'cnpj'      then p_chave ~ '^[0-9]{14}$'
+    when 'celular'   then p_chave ~ '^\+55[0-9]{11}$'
+    when 'email'     then p_chave ~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' and length(p_chave) <= 77
+    when 'aleatoria' then p_chave ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    else false
+  end
+$$;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'vendedores_privado_pix_valida') then
+    alter table public.vendedores_privado add constraint vendedores_privado_pix_valida
+      check (pix_chave is null or public.chave_pix_valida(pix_tipo, pix_chave));
+  end if;
+end $$;
+
+-- Só o "tem ou não tem" vai pra tabela pública: é o que a tela do vendedor,
+-- a lista da liderança e o apadrinhamento precisam saber, sem ver a chave.
+-- Quem mantém isso em dia é o gatilho vendedores_privado_sincronizar_pix.
+alter table public.vendedores add column if not exists tem_pix boolean not null default false;
+
 -- ---- vendas -----------------------------------------------------------------
 --  Cada grupo tem sua própria numeração, começando no #001.
 create sequence if not exists public.vendas_numero_alpha_seq as integer start with 1;
@@ -970,8 +1006,24 @@ language sql stable security definer set search_path = public as $$
     coalesce((select count(*)::int from public.vendas where vendedor_id = v.id and status = 'pendente'), 0)
   from public.vendedores v
   join public.config c on c.grupo = v.grupo
-  where v.situacao = 'ativo' and v.grupo = 'Alpha'
+  -- sem chave Pix cadastrada não tem pra onde mandar o dinheiro: fica de fora
+  where v.situacao = 'ativo' and v.grupo = 'Alpha' and v.tem_pix
   order by v.nome
+$$;
+
+/**
+ * A chave Pix de UM vendedor, pra montar o QR Code do apadrinhamento. Fica
+ * separada da lista de propósito: quem abre o formulário só vê a chave de
+ * quem escolheu apadrinhar, não a de todo mundo de uma vez.
+ */
+create or replace function public.pix_para_apadrinhar(p_vendedor_id uuid)
+returns table (chave text, titular text)
+language sql stable security definer set search_path = public as $$
+  select p.pix_chave, p.pix_titular
+  from public.vendedores v
+  join public.vendedores_privado p on p.vendedor_id = v.id
+  where v.id = p_vendedor_id
+    and v.situacao = 'ativo' and v.grupo = 'Alpha' and v.tem_pix
 $$;
 
 /**
@@ -1014,6 +1066,9 @@ begin
   end if;
   if v_vendedor.situacao <> 'ativo' then
     raise exception 'Esse vendedor já não precisa mais de apadrinhamento — muito obrigado pelo carinho!';
+  end if;
+  if not v_vendedor.tem_pix then
+    raise exception 'Esse vendedor ainda não cadastrou a chave Pix, então ainda não pode ser apadrinhado.';
   end if;
 
   return query
@@ -1062,6 +1117,69 @@ begin
   update public.vendedores set termo_digital_em = now() where id = v_vendedor_id;
 end;
 $$;
+
+/**
+ * Chave Pix do próprio vendedor: mesmo molde do termo — ele não lê
+ * vendedores_privado, só chama estas duas funções, que só alcançam a linha
+ * dele mesmo. A liderança edita direto na tabela (política de RLS acima).
+ */
+create or replace function public.minha_chave_pix(p_grupo text default null)
+returns table (tipo text, chave text, titular text)
+language sql stable security definer set search_path = public as $$
+  select p.pix_tipo, p.pix_chave, p.pix_titular
+  from public.vendedores_privado p
+  where p.vendedor_id = public.meu_vendedor_id('vendedor', p_grupo)
+$$;
+
+create or replace function public.salvar_minha_chave_pix(
+  p_tipo    text,
+  p_chave   text,
+  p_titular text,
+  p_grupo   text default null
+)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_vendedor_id uuid := public.meu_vendedor_id('vendedor', p_grupo);
+begin
+  if v_vendedor_id is null then
+    raise exception 'Só o vendedor pode cadastrar a própria chave Pix.';
+  end if;
+  if not public.chave_pix_valida(p_tipo, btrim(coalesce(p_chave, ''))) then
+    raise exception 'Essa chave Pix não parece válida. Confira o tipo e os números.';
+  end if;
+  if length(btrim(coalesce(p_titular, ''))) < 3 then
+    raise exception 'Digite o nome do titular da conta.';
+  end if;
+
+  insert into public.vendedores_privado (vendedor_id, pix_tipo, pix_chave, pix_titular, atualizado_em)
+  values (v_vendedor_id, p_tipo, btrim(p_chave), btrim(p_titular), now())
+  on conflict (vendedor_id) do update
+    set pix_tipo      = excluded.pix_tipo,
+        pix_chave     = excluded.pix_chave,
+        pix_titular   = excluded.pix_titular,
+        atualizado_em = now();
+end;
+$$;
+
+-- Espelha "tem chave ou não" em vendedores.tem_pix, venha a mudança do
+-- próprio vendedor (função acima) ou do líder (direto na tabela).
+create or replace function public.sincronizar_tem_pix()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  update public.vendedores
+     set tem_pix = (new.pix_chave is not null)
+   where id = new.vendedor_id
+     and tem_pix is distinct from (new.pix_chave is not null);
+  return new;
+end;
+$$;
+
+drop trigger if exists vendedores_privado_sincronizar_pix on public.vendedores_privado;
+create trigger vendedores_privado_sincronizar_pix
+  after insert or update of pix_chave on public.vendedores_privado
+  for each row execute function public.sincronizar_tem_pix();
 
 -- ============================================================================
 --  7. FECHAMENTO E MANUTENÇÃO
@@ -1591,6 +1709,8 @@ revoke all on function public.definir_codigo_de_vendedor(text, text)            
 revoke all on function public.registrar_vendedor_autonomo(text, text, text, text, text, text, text) from public, anon;
 revoke all on function public.registrar_venda(integer, text, text, text, text, text, uuid) from public, anon;
 revoke all on function public.assinar_termo(text, text, text) from public, anon;
+revoke all on function public.minha_chave_pix(text)                                 from public, anon;
+revoke all on function public.salvar_minha_chave_pix(text, text, text, text)         from public, anon;
 revoke all on function public.completar_minha_venda(uuid, text, text, text)         from public, anon;
 revoke all on function public.fechar_meta_do_vendedor(uuid, text)                   from public, anon;
 revoke all on function public.transferir_vendas(uuid, uuid)                         from public, anon;
@@ -1604,6 +1724,8 @@ grant execute on function public.definir_codigo_de_vendedor(text, text)         
 grant execute on function public.registrar_vendedor_autonomo(text, text, text, text, text, text, text) to authenticated;
 grant execute on function public.registrar_venda(integer, text, text, text, text, text, uuid) to authenticated;
 grant execute on function public.assinar_termo(text, text, text) to authenticated;
+grant execute on function public.minha_chave_pix(text)                                 to authenticated;
+grant execute on function public.salvar_minha_chave_pix(text, text, text, text)         to authenticated;
 grant execute on function public.completar_minha_venda(uuid, text, text, text)         to authenticated;
 grant execute on function public.fechar_meta_do_vendedor(uuid, text)                   to authenticated;
 grant execute on function public.transferir_vendas(uuid, uuid)                         to authenticated;
@@ -1615,9 +1737,10 @@ grant execute on function public.meu_papel(text, text), public.meu_grupo(text, t
                           public.pode_corrigir_venda(text, text)
   to anon, authenticated;
 
--- o formulário de apadrinhar é público de propósito — essas duas são as
+-- o formulário de apadrinhar é público de propósito — essas três são as
 -- únicas funções liberadas pra quem não fez login nenhum
 grant execute on function public.listar_para_apadrinhar()                                          to anon, authenticated;
+grant execute on function public.pix_para_apadrinhar(uuid)                                         to anon, authenticated;
 grant execute on function public.registrar_apadrinhamento(uuid, integer, text, text, text)          to anon, authenticated;
 
 -- ============================================================================

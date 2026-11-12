@@ -6,7 +6,7 @@ import ModalVendasDoVendedor from '../ModalVendasDoVendedor'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
 import { useSessao } from '../../hooks/useSessao'
 import { precoDoVendedor, resumoDoVendedor, vendasDoVendedor } from '../../utils/calculos'
-import { rotuloDoTipoPlural } from '../../utils/grupos'
+import { ALPHA, rotuloDoTipoPlural } from '../../utils/grupos'
 import { formatarMoeda } from '../../utils/formato'
 import { baixarCsvDeVendedores } from '../../utils/csv'
 import { rifasParaFecharMeta } from '../../utils/prazo'
@@ -236,6 +236,9 @@ export default function AbaVendedores() {
                     {vendedor.tipo === 'voluntario' && <span className="tag">Voluntário</span>}
                     {!temTermo && <span className={estilos.alerta}>sem termo</span>}
                     {!vendedor.temSenha && <span className={estilos.alerta}>não entrou ainda</span>}
+                    {vendedor.grupo === ALPHA && podeFechar && !vendedor.temPix && (
+                      <span className={estilos.alerta}>sem Pix</span>
+                    )}
                   </div>
                   <div className={estilos.detalhe}>
                     {vendedor.email}

@@ -720,7 +720,10 @@ as **únicas** liberadas pro papel `anon` (quem não fez login) em todo o
 sistema:
 - `listar_para_apadrinhar()` — só leitura, nunca devolve e-mail/telefone,
   só o necessário pra montar o cartão (nome, grupo, meta, preço, quantidade
-  paga/pendente).
+  paga/pendente). Só entra quem já cadastrou a chave Pix (`tem_pix`).
+- `pix_para_apadrinhar(vendedor_id)` — a chave Pix e o titular de UM
+  vendedor, pra montar o QR Code depois que a pessoa escolhe quem apadrinhar
+  (a lista não traz chave nenhuma, de propósito).
 - `registrar_apadrinhamento(...)` — mesmo molde do `registrar_venda()`, sem
   exigir conta. A venda **sempre** nasce `'pendente'` — não tem gateway de
   pagamento, então a confirmação continua manual, a liderança conferindo o
@@ -729,7 +732,7 @@ sistema:
   aceito (vira oferta pra igreja), então não existe risco de concorrência
   de "vender a mesma rifa duas vezes".
 
-Nenhuma tabela ganhou política de RLS nova pra `anon` — as duas funções são
+Nenhuma tabela ganhou política de RLS nova pra `anon` — as três funções são
 `SECURITY DEFINER` e só devolvem o que elas mesmas decidem, nunca expõem a
 tabela direto. O bucket `comprovantes` ganhou uma política a mais, só de
 `insert`, pra `anon` conseguir enviar o comprovante sem conseguir listar ou
@@ -739,10 +742,33 @@ abrir o de ninguém (isso continua só pra liderança).
 monta o "Pix Copia e Cola" no padrão BR Code/EMV do Banco Central (com
 checksum CRC16), sem gateway de pagamento nem serviço externo nenhum, e
 desenha o QR reaproveitando a biblioteca `qrcode` que já existe no projeto
-(mesma usada em `CartaoQrCode.jsx`). A chave Pix/nome do titular/cidade da
-conta que recebe ficam como constante no topo do arquivo
-(`PIX_RECEBEDOR`) — é informação que se define uma vez só; se precisar
-trocar direto pelo app depois, dá pra mover pra Configurações.
+(mesma usada em `CartaoQrCode.jsx`).
+
+**O dinheiro do apadrinhamento cai na conta do próprio vendedor**, não na
+da igreja — o vendedor repassa no acerto, junto com as vendas normais. Por
+isso cada vendedor do Alpha cadastra a **chave Pix onde recebe as rifas**:
+
+- Fica em `vendedores_privado` (`pix_tipo`, `pix_chave`, `pix_titular`),
+  porque `vendedores` é legível por todo mundo do grupo. Em `vendedores` só
+  vai o `tem_pix` (sim/não), mantido pelo gatilho
+  `vendedores_privado_sincronizar_pix`.
+- O titular existe porque muito adolescente recebe na conta do pai/mãe — é
+  o nome que aparece pra quem paga, e o formulário avisa "o Pix cai na conta
+  de FULANA".
+- `utils/chavePix.js` confere (CPF/CNPJ com dígito verificador) e salva no
+  formato do Pix: só números, celular com `+55`, e-mail/aleatória em
+  minúsculas. O banco confere de novo com `chave_pix_valida()`, como
+  `check` da tabela.
+- **Vendedor:** `CartaoChavePix.jsx` na tela dele — sem chave, o pop-up
+  (`ModalChavePix.jsx`) abre sozinho ao entrar no app e, se ele fechar, fica
+  uma faixa cobrando; com chave, mostra a chave (parte escondida) e o botão
+  "Alterar". Ele lê/grava a dele só por `minha_chave_pix()` /
+  `salvar_minha_chave_pix()`, mesmo molde do `assinar_termo()`.
+- **Liderança:** edita no "Editar vendedor" (direto na tabela, pela política
+  de RLS que já existia) e vê a etiqueta "sem Pix" na aba Vendedores.
+  Apagar a chave tira o vendedor da lista do apadrinhamento.
+
+Tudo isso só no Alpha, como o resto do apadrinhamento.
 
 `AbaVendedores.jsx`/`TelaVendedor.jsx` mostram "(X apadrinhadas)" ao lado de
 "(X próprias)" sempre que existir alguma venda com `origem =

@@ -79,7 +79,7 @@ export default function TelaApadrinhar() {
 
       {!carregando && !erro && comConta.length === 0 && (
         <EstadoVazio icone="🎉">
-          <p>Ninguém precisa de apadrinhamento agora — todo mundo já bateu a meta!</p>
+          <p>Ninguém disponível para apadrinhamento agora. Volte daqui a pouco!</p>
         </EstadoVazio>
       )}
 

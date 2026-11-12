@@ -19,6 +19,9 @@ export function mapearPrivado(linha) {
     termoAssinadoEm: linha.termo_assinado_em || '',
     termoAssinatura: linha.termo_assinatura || '',
     termoConteudo: linha.termo_conteudo || '',
+    pixTipo: linha.pix_tipo || '',
+    pixChave: linha.pix_chave || '',
+    pixTitular: linha.pix_titular || '',
   }
 }
 
@@ -43,11 +46,20 @@ export async function listarDadosPrivados() {
   return porVendedor
 }
 
-export async function salvarDadosPrivados(vendedorId, { observacao, termoPath, termoAssinadoEm }) {
+export async function salvarDadosPrivados(
+  vendedorId,
+  { observacao, termoPath, termoAssinadoEm, pixTipo, pixChave, pixTitular }
+) {
   const linha = { vendedor_id: vendedorId, atualizado_em: new Date().toISOString() }
   if (observacao !== undefined) linha.observacao = observacao || null
   if (termoPath !== undefined) linha.termo_path = termoPath || null
   if (termoAssinadoEm !== undefined) linha.termo_assinado_em = termoAssinadoEm || null
+  // a chave chega já normalizada (utils/chavePix); vazia = tirar a chave
+  if (pixChave !== undefined) {
+    linha.pix_chave = pixChave || null
+    linha.pix_tipo = pixChave ? pixTipo : null
+    linha.pix_titular = pixChave ? pixTitular || null : null
+  }
 
   const salvo = verificar(
     await supabase
