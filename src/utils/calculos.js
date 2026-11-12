@@ -81,6 +81,7 @@ export function resumoDoVendedor(vendedor, vendas, config) {
     pendente: totalPendente(minhasVendas, preco),
     quantidade: minhasVendas.length,
     quantidadePropria: minhasVendas.filter((v) => v.origem === 'propria').length,
+    quantidadeApadrinhada: minhasVendas.filter((v) => v.origem === 'apadrinhamento').length,
     meta,
     faltante: Math.max(0, meta - total),
     percentual: percentualDaMeta(total, meta),

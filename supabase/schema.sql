@@ -322,6 +322,12 @@ create index if not exists vendas_vendedor_idx on public.vendas (vendedor_id);
 create index if not exists vendas_grupo_idx    on public.vendas (grupo);
 create index if not exists vendas_lote_idx     on public.vendas (lote_id);
 
+-- "apadrinhamento": rifa comprada por alguém de fora pro vendedor, pelo
+-- formulário público — ver seção 6-B
+alter table public.vendas drop constraint if exists vendas_origem_check;
+alter table public.vendas add constraint vendas_origem_check
+  check (origem in ('venda', 'propria', 'apadrinhamento'));
+
 -- ---- inscricoes_push: notificação de verdade, na barra do celular ---------
 create table if not exists public.inscricoes_push (
   id           uuid primary key default gen_random_uuid(),
@@ -924,6 +930,102 @@ begin
 end;
 $$;
 
+-- ============================================================================
+--  6-B. APADRINHAMENTO: formulário público, sem login, pra comprar rifa de
+--       quem ainda não bateu a meta
+-- ----------------------------------------------------------------------------
+--  As duas funções abaixo são as ÚNICAS liberadas pro papel "anon" (quem não
+--  fez login nenhum) em toda a seção 9 — tudo o mais continua travado. Nunca
+--  expõem a tabela direto (são SECURITY DEFINER), só o que elas mesmas
+--  decidem devolver — por isso não precisam de política de RLS própria.
+-- ============================================================================
+
+/**
+ * Lista pública de quem ainda pode ser apadrinhado: só o necessário pra
+ * montar o cartão na tela (nunca e-mail/telefone/user_id). O cálculo de
+ * total arrecadado e quanto falta fica por conta do front-end, com a MESMA
+ * fórmula de sempre (preço x quantidade paga) — aqui só entrega os
+ * ingredientes (meta e preço já resolvidos por vendedor, considerando
+ * chalé x quarto no Kombo) e as quantidades.
+ */
+create or replace function public.listar_para_apadrinhar()
+returns table (
+  vendedor_id uuid,
+  nome        text,
+  grupo       text,
+  meta        numeric,
+  preco       numeric,
+  qtd_paga    integer,
+  qtd_pendente integer
+)
+language sql stable security definer set search_path = public as $$
+  select
+    v.id,
+    v.nome,
+    v.grupo,
+    coalesce(
+      v.meta,
+      case when v.grupo = 'Kombo' and v.destino = 'chale' then c.meta_chale else c.meta_padrao end
+    ) as meta,
+    case when v.grupo = 'Kombo' and v.destino = 'chale' then c.preco_rifa_chale else c.preco_rifa end as preco,
+    coalesce((select count(*)::int from public.vendas where vendedor_id = v.id and status = 'pago'), 0),
+    coalesce((select count(*)::int from public.vendas where vendedor_id = v.id and status = 'pendente'), 0)
+  from public.vendedores v
+  join public.config c on c.grupo = v.grupo
+  where v.situacao = 'ativo'
+  order by v.grupo, v.nome
+$$;
+
+/**
+ * Registra as rifas que alguém de fora comprou em nome de um vendedor —
+ * sem login. Mesmo molde do registrar_venda(), com duas diferenças: não
+ * exige conta nenhuma, e a venda SEMPRE nasce 'pendente' (nunca confia no
+ * que a pessoa disser sobre ter pago de verdade — a liderança confirma
+ * depois conferindo o comprovante, igual já acontece hoje com qualquer Pix).
+ * Sem checar "não pode passar do que falta": se passar um pouco da meta,
+ * vira oferta pra igreja — comportamento que já existe e é aceito.
+ */
+create or replace function public.registrar_apadrinhamento(
+  p_vendedor_id      uuid,
+  p_quantidade       integer,
+  p_comprador        text,
+  p_telefone         text default null,
+  p_comprovante_path text default null
+)
+returns setof public.vendas
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  v_vendedor public.vendedores%rowtype;
+  v_lote     uuid := gen_random_uuid();
+begin
+  if p_quantidade is null or p_quantidade < 1 or p_quantidade > 50 then
+    raise exception 'A quantidade precisa ser de 1 a 50 rifas.';
+  end if;
+  if length(btrim(coalesce(p_comprador, ''))) = 0 then
+    raise exception 'Digite o nome do comprador.';
+  end if;
+
+  select * into v_vendedor from public.vendedores where id = p_vendedor_id;
+  if not found then
+    raise exception 'Vendedor não encontrado.';
+  end if;
+  if v_vendedor.situacao <> 'ativo' then
+    raise exception 'Esse vendedor já não precisa mais de apadrinhamento — muito obrigado pelo carinho!';
+  end if;
+
+  return query
+  insert into public.vendas
+    (vendedor_id, lote_id, comprador, telefone, pagamento, comprovante_path, status, origem, grupo, numero)
+  select v_vendedor.id, v_lote, btrim(p_comprador), nullif(btrim(coalesce(p_telefone, '')), ''),
+         'pix', nullif(btrim(coalesce(p_comprovante_path, '')), ''), 'pendente', 'apadrinhamento',
+         v_vendedor.grupo, 0        -- grupo e numero são reescritos pelo gatilho
+  from generate_series(1, p_quantidade)
+  returning *;
+end;
+$$;
+
 /**
  * Assinatura digital do termo: o vendedor lê o texto (já com os dados dele)
  * dentro do app e digita o próprio nome. Grava o nome, o texto exato lido e
@@ -1512,6 +1614,11 @@ grant execute on function public.meu_papel(text, text), public.meu_grupo(text, t
                           public.pode_corrigir_venda(text, text)
   to anon, authenticated;
 
+-- o formulário de apadrinhar é público de propósito — essas duas são as
+-- únicas funções liberadas pra quem não fez login nenhum
+grant execute on function public.listar_para_apadrinhar()                                          to anon, authenticated;
+grant execute on function public.registrar_apadrinhamento(uuid, integer, text, text, text)          to anon, authenticated;
+
 -- ============================================================================
 --  10. ARQUIVOS (buckets privados)
 -- ----------------------------------------------------------------------------
@@ -1537,6 +1644,7 @@ begin
 
   execute 'drop policy if exists "termos: liderança do grupo" on storage.objects';
   execute 'drop policy if exists "comprovantes: do meu grupo" on storage.objects';
+  execute 'drop policy if exists "comprovantes: apadrinhamento anonimo envia" on storage.objects';
   -- nomes das versões anteriores
   execute 'drop policy if exists "termos: só quem está logado lê" on storage.objects';
   execute 'drop policy if exists "termos: só quem está logado envia" on storage.objects';
@@ -1565,6 +1673,16 @@ begin
     with check (
       bucket_id = 'comprovantes'
       and public.tenho_perfil_no_grupo((storage.foldername(name))[1])
+    )$p$;
+
+  -- quem apadrinha não faz login nenhum, mas consegue ENVIAR o comprovante
+  -- (nunca listar/abrir o de ninguém — isso continua só pra liderança, na
+  -- política acima)
+  execute $p$create policy "comprovantes: apadrinhamento anonimo envia"
+    on storage.objects for insert to anon
+    with check (
+      bucket_id = 'comprovantes'
+      and (storage.foldername(name))[1] in ('Alpha', 'Kombo')
     )$p$;
 
 exception when others then

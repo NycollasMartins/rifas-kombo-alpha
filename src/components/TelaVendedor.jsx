@@ -122,6 +122,11 @@ export default function TelaVendedor() {
             {resumo.quantidadePropria} compradas por você
           </span>
         )}
+        {resumo.quantidadeApadrinhada > 0 && (
+          <span className={estilos.contagemPropria}>
+            {resumo.quantidadeApadrinhada} apadrinhadas 🙏
+          </span>
+        )}
       </div>
 
       {compras.length === 0 ? (

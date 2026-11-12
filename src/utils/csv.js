@@ -36,7 +36,11 @@ export function montarCsvDeVendas(vendas, vendedores) {
         s.grupo || (v ? v.grupo : ''),
         s.pagamento,
         s.pagamento === 'pix' ? (s.comprovantePath ? 'anexado' : 'sem comprovante') : 'dinheiro',
-        s.origem === 'propria' ? 'compra propria' : 'venda',
+        s.origem === 'propria'
+          ? 'compra propria'
+          : s.origem === 'apadrinhamento'
+            ? 'apadrinhamento'
+            : 'venda',
         s.status,
         s.repasse || 'pendente',
         formatarDataHora(s.data),

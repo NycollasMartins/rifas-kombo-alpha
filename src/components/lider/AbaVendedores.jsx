@@ -10,24 +10,9 @@ import { rotuloDoTipoPlural } from '../../utils/grupos'
 import { formatarMoeda } from '../../utils/formato'
 import { baixarCsvDeVendedores } from '../../utils/csv'
 import { rifasParaFecharMeta } from '../../utils/prazo'
+import { bateBusca } from '../../utils/busca'
 import { traduzirErro } from '../../lib/db/erros'
 import estilos from './AbaVendedores.module.css'
-
-/**
- * Separa em palavras pra busca "começa com" — sem isso, procurar uma letra
- * batia com qualquer e-mail que tivesse ela em qualquer posição (ex: buscar
- * "b" trazia nomes com "A" só porque o e-mail tinha um "b" no meio). Tira
- * acento também (José -> jose) — sem isso, digitar sem acento (comum no
- * celular) não achava ninguém com acento no nome.
- */
-function palavrasDe(texto) {
-  return (texto || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter(Boolean)
-}
 
 /** Os vendedores do grupo: cadastro, termo, vendas e fechamento de meta. */
 export default function AbaVendedores() {
@@ -78,17 +63,9 @@ export default function AbaVendedores() {
   const filtrados = useMemo(() => {
     const termo = busca.trim().toLowerCase()
     if (!termo) return doTipo
-    const palavrasDoTermo = palavrasDe(termo)
     const soDigitos = termo.replace(/\D/g, '')
     return doTipo.filter((v) => {
-      const palavrasDoVendedor = [...palavrasDe(v.nome), ...palavrasDe(v.email)]
-      // cada palavra digitada precisa bater com ALGUMA palavra do cadastro —
-      // assim "joão silva" acha "João Pedro Silva", e "silva" sozinho também
-      const bateuPalavra =
-        palavrasDoTermo.length > 0 &&
-        palavrasDoTermo.every((termoPalavra) =>
-          palavrasDoVendedor.some((p) => p.startsWith(termoPalavra))
-        )
+      const bateuPalavra = bateBusca(termo, v.nome, v.email)
       const bateuTelefone =
         soDigitos.length > 0 && (v.telefone || '').replace(/\D/g, '').includes(soDigitos)
       return bateuPalavra || bateuTelefone
@@ -268,6 +245,8 @@ export default function AbaVendedores() {
                     {formatarMoeda(resumo.total)} de {formatarMoeda(resumo.meta)} ·{' '}
                     {resumo.quantidade} rifas
                     {resumo.quantidadePropria > 0 && ` (${resumo.quantidadePropria} próprias)`}
+                    {resumo.quantidadeApadrinhada > 0 &&
+                      ` (${resumo.quantidadeApadrinhada} apadrinhadas)`}
                   </div>
                   {podeFechar && resumo.faltante > 0 && (
                     <div className={estilos.faltante}>
