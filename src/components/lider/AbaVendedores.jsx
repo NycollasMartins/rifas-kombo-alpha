@@ -49,10 +49,23 @@ export default function AbaVendedores() {
   const [ocupado, setOcupado] = useState('')
   const [busca, setBusca] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('') // '' = todos
+  const [filtroPix, setFiltroPix] = useState('') // '' = todos | 'sem' | 'com'
+
+  // chave Pix só importa no Alpha (é pra onde vai o apadrinhamento)
+  const pedePix = grupo === ALPHA
+  const contagemPix = useMemo(() => {
+    const quemConta = todosDoGrupo.filter((v) => v.situacao !== 'desistiu')
+    return { com: quemConta.filter((v) => v.temPix).length, total: quemConta.length }
+  }, [todosDoGrupo])
 
   const doTipo = useMemo(
-    () => (filtroTipo ? vendedores.filter((v) => v.tipo === filtroTipo) : vendedores),
-    [vendedores, filtroTipo]
+    () =>
+      vendedores.filter(
+        (v) =>
+          (!filtroTipo || v.tipo === filtroTipo) &&
+          (!pedePix || !filtroPix || (filtroPix === 'com' ? v.temPix : !v.temPix))
+      ),
+    [vendedores, filtroTipo, filtroPix, pedePix]
   )
   const rotuloDoTipo = {
     '': '',
@@ -181,12 +194,27 @@ export default function AbaVendedores() {
             <option value="adolescente">{rotuloDoTipoPlural(grupo)}</option>
             <option value="voluntario">Voluntários</option>
           </select>
+          {pedePix && (
+            <select value={filtroPix} onChange={(e) => setFiltroPix(e.target.value)}>
+              <option value="">Chave Pix: todos</option>
+              <option value="sem">Sem chave Pix</option>
+              <option value="com">Com chave Pix</option>
+            </select>
+          )}
           <input
             placeholder="Buscar por nome, e-mail ou telefone…"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
           />
         </div>
+      )}
+
+      {pedePix && contagemPix.total > 0 && (
+        <p className="texto-ajuda" style={{ margin: '0 0 8px' }}>
+          Chave Pix: <strong>{contagemPix.com} de {contagemPix.total}</strong> já cadastraram
+          {contagemPix.com < contagemPix.total &&
+            ` · faltam ${contagemPix.total - contagemPix.com} (use o filtro "Sem chave Pix" pra cobrar)`}
+        </p>
       )}
 
       {todosDoGrupo.length > 0 && (
@@ -236,9 +264,13 @@ export default function AbaVendedores() {
                     {vendedor.tipo === 'voluntario' && <span className="tag">Voluntário</span>}
                     {!temTermo && <span className={estilos.alerta}>sem termo</span>}
                     {!vendedor.temSenha && <span className={estilos.alerta}>não entrou ainda</span>}
-                    {vendedor.grupo === ALPHA && podeFechar && !vendedor.temPix && (
-                      <span className={estilos.alerta}>sem Pix</span>
-                    )}
+                    {pedePix &&
+                      vendedor.situacao !== 'desistiu' &&
+                      (vendedor.temPix ? (
+                        <span className="tag tag-good">Pix ✓</span>
+                      ) : (
+                        <span className={estilos.alerta}>sem Pix</span>
+                      ))}
                   </div>
                   <div className={estilos.detalhe}>
                     {vendedor.email}

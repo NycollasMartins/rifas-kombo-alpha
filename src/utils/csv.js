@@ -82,6 +82,7 @@ const CABECALHO_VENDEDORES = [
   'rifas',
   'termo',
   'criou_senha',
+  'chave_pix',
 ]
 
 export function montarCsvDeVendedores(vendedores, vendas, config, dadosPrivados = {}) {
@@ -105,6 +106,7 @@ export function montarCsvDeVendedores(vendedores, vendas, config, dadosPrivados 
         r.quantidade,
         assinou ? 'sim' : 'nao',
         vendedor.temSenha ? 'sim' : 'nao',
+        vendedor.temPix ? 'sim' : 'nao',
       ])
     })
 
