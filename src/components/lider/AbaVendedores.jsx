@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import EstadoVazio from '../EstadoVazio'
 import EtiquetaSituacao from '../EtiquetaSituacao'
 import ModalVendedor from '../ModalVendedor'
@@ -77,20 +77,24 @@ export default function AbaVendedores() {
     voluntario: ' (voluntários)',
   }[filtroTipo]
 
-  // o campo responde na hora; a lista acompanha logo depois, sem segurar o teclado
-  const buscaAdiada = useDeferredValue(busca)
-
   const filtrados = useMemo(() => {
-    const termo = buscaAdiada.trim().toLowerCase()
+    const termo = busca.trim().toLowerCase()
     if (!termo) return doTipo
     const soDigitos = termo.replace(/\D/g, '')
+    // Por padrão procura SÓ no nome: muito adolescente está cadastrado com o
+    // e-mail do pai/mãe/irmão, e procurar no e-mail fazia "felipe" trazer o
+    // Heitor (e-mail felipeaugusto...) junto. Pra procurar pelo e-mail, é só
+    // digitar com "@" (ex: "felipe@").
+    const porEmail = termo.includes('@')
     return doTipo.filter((v) => {
-      const bateuPalavra = bateBusca(termo, v.nome, v.email)
+      const bateuPalavra = porEmail
+        ? (v.email || '').toLowerCase().startsWith(termo.replace(/@$/, ''))
+        : bateBusca(termo, v.nome)
       const bateuTelefone =
         soDigitos.length > 0 && (v.telefone || '').replace(/\D/g, '').includes(soDigitos)
       return bateuPalavra || bateuTelefone
     })
-  }, [doTipo, buscaAdiada])
+  }, [doTipo, busca])
 
   // resumoDoVendedor varre TODA a tabela de vendas pra somar o total de um
   // vendedor — com milhares de vendas, fazer isso de novo pra cada linha a
@@ -209,7 +213,7 @@ export default function AbaVendedores() {
             </select>
           )}
           <input
-            placeholder="Buscar por nome, e-mail ou telefone…"
+            placeholder="Buscar por nome ou telefone…"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
           />

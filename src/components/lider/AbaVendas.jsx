@@ -4,6 +4,7 @@ import ModalDetalheVenda from '../ModalDetalheVenda'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
 import ModalComprovante from '../ModalComprovante'
 import { formatarNumeroRifa, rotuloPagamento } from '../../utils/formato'
+import { bateBusca } from '../../utils/busca'
 import { baixarCsvDeVendas } from '../../utils/csv'
 import { precoDoVendedor } from '../../utils/calculos'
 import { traduzirErro } from '../../lib/db/erros'
@@ -52,9 +53,11 @@ export default function AbaVendas() {
           if (venda.pagamento !== 'pix' || venda.comprovantePath) return false
         }
         if (termo) {
+          // mesma regra da busca de vendedores: cada palavra digitada tem que
+          // ser o COMEÇO de uma palavra do nome — antes "ana" achava Mariana,
+          // Juliana, Santana...
           const vendedor = porId.get(venda.vendedorId)
-          const alvo = `${venda.comprador} ${vendedor?.nome || ''}`.toLowerCase()
-          if (!alvo.includes(termo)) return false
+          if (!bateBusca(termo, venda.comprador, vendedor?.nome)) return false
         }
         return true
       })
