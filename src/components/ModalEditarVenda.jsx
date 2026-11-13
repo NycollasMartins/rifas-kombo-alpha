@@ -149,7 +149,7 @@ export default function ModalEditarVenda({ venda, aoFechar }) {
 
       <p className="texto-ajuda">
         Esta rifa é do <strong>{venda.grupo}</strong>, e só pode passar para um vendedor do mesmo
-        grupo — cada grupo tem a numeração dele. Mudar o número não mexe na numeração das
+        grupo, porque cada grupo tem a numeração dele. Mudar o número não mexe na numeração das
         próximas: se você liberar um número, ele não volta a ser usado sozinho.
       </p>
 

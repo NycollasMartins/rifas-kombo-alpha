@@ -80,7 +80,7 @@ export default function TelaLider({ aoVoltar }) {
         {modo === 'criar' && (
           <p className="texto-ajuda">
             Você cria a sua própria conta. Para provar que é da liderança, informe o código do
-            acampamento — peça a quem já é líder do seu grupo.
+            acampamento. Peça a quem já é líder do seu grupo.
           </p>
         )}
         {modo === 'esqueci' && (

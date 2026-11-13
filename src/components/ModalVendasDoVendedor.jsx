@@ -102,7 +102,7 @@ export default function ModalVendasDoVendedor({ vendedor, aoFechar }) {
                 )
               ) : (
                 <span className={estilos.emDinheiro}>
-                  Dinheiro — o vendedor declarou que recebeu
+                  Dinheiro: o vendedor declarou que recebeu
                 </span>
               )}
             </div>

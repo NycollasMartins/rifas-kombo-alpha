@@ -56,7 +56,7 @@ export function montarMensagemDaCompra({
   const linhas = [
     `Oi, ${primeiroNome}! 🔥`,
     '',
-    `Sua compra das rifas do acampamento${info.nomeCompleto ? ' — ' + info.nomeCompleto : ''} está registrada:`,
+    `Sua compra das rifas do acampamento${info.nomeCompleto ? ' (' + info.nomeCompleto + ')' : ''} está registrada:`,
     '',
     `🎟️ ${quantidade === 1 ? 'Rifa' : `${quantidade} rifas`}: ${lista}`,
     `💰 Total: ${formatarMoeda(valorTotal)}`,
@@ -75,7 +75,7 @@ export function montarMensagemDaCompra({
     dataSorteio
       ? `Guarde esses números: o sorteio é dia ${formatarPrazo(dataSorteio)}, entre as rifas pagas.`
       : `Guarde esses números: o sorteio é entre as rifas pagas.`,
-    nomeDoVendedor ? `Qualquer coisa é só me chamar. — ${nomeDoVendedor}` : '',
+    nomeDoVendedor ? `Qualquer coisa é só me chamar.\n${nomeDoVendedor}` : '',
     '',
     'Obrigado por ajudar! 🙏'
   )
@@ -95,7 +95,7 @@ export function montarMensagemDoTermo({ nome, grupo, precoRifa, meta, prazoFinal
   const linhas = [
     `Oi, ${primeiroNome}! 🔥`,
     '',
-    `Você foi cadastrado(a) como vendedor(a) das rifas do acampamento${info.nomeCompleto ? ' — ' + info.nomeCompleto : ''}.`,
+    `Você foi cadastrado(a) como vendedor(a) das rifas do acampamento${info.nomeCompleto ? ' (' + info.nomeCompleto + ')' : ''}.`,
     '',
     '📋 Termo de responsabilidade:',
     `• Preço de cada rifa: ${formatarMoeda(precoRifa)}`,

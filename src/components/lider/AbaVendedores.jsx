@@ -112,8 +112,8 @@ export default function AbaVendedores() {
     const quantidade = vendasDoVendedor(vendas, vendedor.id).length
     if (quantidade > 0) {
       alert(
-        `${vendedor.nome} já tem ${quantidade} rifa(s) registrada(s) e não pode ser excluído — ` +
-          'o registro desse dinheiro precisa continuar existindo.\n\n' +
+        `${vendedor.nome} já tem ${quantidade} rifa(s) registrada(s) e não pode ser excluído, ` +
+          'porque o registro desse dinheiro precisa continuar existindo.\n\n' +
           'Se ele não vai mais ao acampamento, edite e marque a situação como "Desistiu".'
       )
       return
@@ -251,7 +251,7 @@ export default function AbaVendedores() {
           ) : mostrarFinalizados ? (
             <p>Ninguém finalizou ainda.</p>
           ) : (
-            <p>Todo mundo já finalizou — marque "Mostrar só quem já finalizou" acima pra ver.</p>
+            <p>Todo mundo já finalizou. Marque "Mostrar só quem já finalizou" acima pra ver.</p>
           )}
         </EstadoVazio>
       ) : filtrados.length === 0 ? (

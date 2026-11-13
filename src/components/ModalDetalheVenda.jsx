@@ -19,7 +19,7 @@ export default function ModalDetalheVenda({ venda, vendedorNome, precoRifa, aoFe
         {venda.telefone ? ` · ${venda.telefone}` : ''}
       </p>
       <p className="texto-ajuda">
-        Vendido por {vendedorNome || '—'} · {formatarDataHora(venda.data)}
+        Vendido por {vendedorNome || 'vendedor não encontrado'} · {formatarDataHora(venda.data)}
       </p>
       <p className="texto-ajuda">
         {formatarMoeda(precoRifa)} · {rotuloPagamento(venda.pagamento)} ·{' '}

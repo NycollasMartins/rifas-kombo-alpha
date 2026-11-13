@@ -99,7 +99,7 @@ export default function ModalCompletarVenda({ lote, precoRifa, grupo, aoFechar }
           ) : v.comprovantePath ? (
             <p className={estilos.ajudaComprovante}>Já tem um comprovante anexado.</p>
           ) : (
-            <p className={estilos.ajudaComprovante}>Ainda sem comprovante — anexe quando tiver.</p>
+            <p className={estilos.ajudaComprovante}>Ainda sem comprovante. Anexe quando tiver.</p>
           )}
 
           <div className={estilos.acoesComprovante}>

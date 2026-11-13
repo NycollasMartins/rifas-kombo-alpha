@@ -64,7 +64,7 @@ export default function AbaUsuarios() {
 
       <p className="texto-ajuda">
         Um novo líder entra sozinho, informando o código do acampamento em "Sou líder → Criar
-        acesso de líder" — não precisa cadastrar aqui.
+        acesso de líder". Não precisa cadastrar aqui.
       </p>
 
       {erro && <p className="error-text">{erro}</p>}

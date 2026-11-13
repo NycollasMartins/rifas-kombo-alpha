@@ -95,7 +95,7 @@ export default function TelaApadrinhar() {
         <div className={estilos.chama}>🔥</div>
         <h1 className={estilos.titulo}>Apadrinhe um Adolescente</h1>
         <p className={estilos.subtitulo}>
-          Escolha quem ainda está devendo e ajude a completar a meta dele(a) — rapidinho, via Pix.
+          Escolha quem ainda está devendo e ajude a completar a meta dele(a). É rapidinho, via Pix.
         </p>
       </div>
 

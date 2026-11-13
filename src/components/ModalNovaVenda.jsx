@@ -124,7 +124,7 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
         <div className={estilos.envio}>
           <strong className={estilos.envioTitulo}>Avise o comprador</strong>
           <p className={estilos.envioAjuda}>
-            Abre o WhatsApp com a mensagem pronta — os números, o valor e o seu nome. Você só
+            Abre o WhatsApp com a mensagem pronta, com os números, o valor e o seu nome. Você só
             confere e aperta enviar.
           </p>
           <BotoesDoWhatsapp

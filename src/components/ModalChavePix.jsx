@@ -65,7 +65,7 @@ export default function ModalChavePix({ atual, aoFechar, aoSalvar }) {
       <CamposChavePix valor={valor} aoMudar={setValor} prefixoId="minha-pix" />
 
       <p className="texto-ajuda">
-        Se a conta é do seu pai, mãe ou responsável, coloque o nome dele(a) como titular — é o nome
+        Se a conta é do seu pai, mãe ou responsável, coloque o nome dele(a) como titular. É o nome
         que aparece pra quem for pagar.
       </p>
 

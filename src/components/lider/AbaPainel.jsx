@@ -60,7 +60,7 @@ export default function AbaPainel() {
         <div className={`${estilos.prazo} ${encerradoParaVendedor ? estilos.prazoVencido : ''}`}>
           <strong>{recadoDoPrazo(config.prazoVendedor)}</strong>
           <span>
-            É o que o vendedor vê — {formatarPrazo(config.prazoVendedor)}
+            É o que o vendedor vê: {formatarPrazo(config.prazoVendedor)}
           </span>
         </div>
       )}
@@ -68,7 +68,7 @@ export default function AbaPainel() {
       {config.prazoFinal && (
         <div className={`${estilos.prazo} ${encerrado ? estilos.prazoVencido : ''}`}>
           <strong>{recadoDoPrazo(config.prazoFinal)}</strong>
-          <span>Prazo real, só a liderança vê — {formatarPrazo(config.prazoFinal)}</span>
+          <span>Prazo real, só a liderança vê: {formatarPrazo(config.prazoFinal)}</span>
         </div>
       )}
 
@@ -109,7 +109,7 @@ export default function AbaPainel() {
       {pagoIgreja > 0 && (
         <div className={estilos.igreja}>
           <strong>{formatarMoeda(pagoIgreja)}</strong>
-          <span>Arrecadado por quem desistiu — fica para o acampamento</span>
+          <span>Arrecadado por quem desistiu (fica para o acampamento)</span>
         </div>
       )}
 
@@ -140,7 +140,7 @@ export default function AbaPainel() {
       {topTalao.length > 0 && (
         <>
           <div className="section-head">
-            <h2>Top 3 — mais de um talão (R$ 600+)</h2>
+            <h2>Top 3: mais de um talão (R$ 600+)</h2>
           </div>
           <CartaoRanking ranking={topTalao} />
         </>
@@ -149,7 +149,7 @@ export default function AbaPainel() {
       {topPrimeiros.length > 0 && (
         <>
           <div className="section-head">
-            <h2>Top 3 — primeiros a bater a meta</h2>
+            <h2>Top 3: primeiros a bater a meta</h2>
           </div>
           <CartaoRankingPrimeiros ranking={topPrimeiros} />
         </>

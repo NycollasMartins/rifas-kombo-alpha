@@ -93,7 +93,7 @@ export default function AbaSorteio() {
             <div className={estilos.nomeGanhador}>{ganhador.comprador}</div>
             <div className={estilos.detalheGanhador}>
               {ganhador.telefone ? ganhador.telefone + ' · ' : ''}
-              vendido por {vendedorDoGanhador ? vendedorDoGanhador.nome : '—'}
+              vendido por {vendedorDoGanhador ? vendedorDoGanhador.nome : 'vendedor não encontrado'}
             </div>
           </div>
         )}

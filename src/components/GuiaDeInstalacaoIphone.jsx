@@ -70,7 +70,7 @@ export default function GuiaDeInstalacaoIphone({ aoFechar }) {
   return (
     <Modal titulo="Instalar na tela de início" aoFechar={aoFechar} soFechaNoX>
       <p className="texto-ajuda">
-        No iPhone, a instalação é feita pelo próprio navegador — nenhum site consegue fazer isso
+        No iPhone, a instalação é feita pelo próprio navegador. Nenhum site consegue fazer isso
         sozinho. O caminho mudou um pouco no iOS 27: escolha a versão do seu aparelho.
       </p>
 
@@ -103,7 +103,7 @@ export default function GuiaDeInstalacaoIphone({ aoFechar }) {
       {versao === 26 && (
         <p className={estilos.fecho}>
           Em iPhones mais antigos o <strong>Compartilhar</strong> aparece direto na barra de baixo,
-          sem passar pelos três pontos — o resto é igual.
+          sem passar pelos três pontos. O resto é igual.
         </p>
       )}
       <p className={estilos.fecho}>

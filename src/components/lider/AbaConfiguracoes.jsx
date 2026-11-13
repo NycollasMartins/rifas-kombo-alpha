@@ -115,7 +115,7 @@ export default function AbaConfiguracoes() {
 
       {grupo === KOMBO && (
         <div className="card">
-          <h2>Preço e meta — vendedores do chalé</h2>
+          <h2>Preço e meta dos vendedores do chalé</h2>
           <p className="texto-ajuda">
             Vale só para quem está vendendo para ficar no chalé. Quem vende para o quarto normal
             usa os valores do cartão acima.
@@ -203,9 +203,9 @@ export default function AbaConfiguracoes() {
       </div>
 
       <div className="card">
-        <h2>Prazo — o que o vendedor vê</h2>
+        <h2>Prazo que o vendedor vê</h2>
         <p className="texto-ajuda">
-          Pro vendedor, essa é a <strong>única</strong> data de prazo que existe — aparece na tela
+          Pro vendedor, essa é a <strong>única</strong> data de prazo que existe. Aparece na tela
           dele com os avisos de contagem regressiva (7 dias, 3 dias, 24 horas...) e também no termo
           de compromisso que ele assina. Pode ser antes do prazo final de verdade (próximo card),
           de propósito: mantém o senso de urgência e evita que ele relaxe achando que ainda falta
@@ -241,11 +241,11 @@ export default function AbaConfiguracoes() {
       </div>
 
       <div className="card">
-        <h2>Prazo final de verdade — só a liderança vê</h2>
+        <h2>Prazo final de verdade (só a liderança vê)</h2>
         <p className="texto-ajuda">
           O prazo real, definitivo. Depois dessa data, quem não bateu a meta precisa comprar as
           rifas que faltam, conforme o termo de compromisso. <strong>O vendedor nunca vê essa
-          data</strong> — nem na tela dele, nem no termo, nem em notificação. Deixe em branco se
+          data</strong>: nem na tela dele, nem no termo, nem em notificação. Deixe em branco se
           não quiser prazo.
         </p>
         <div className="field">
@@ -270,7 +270,7 @@ export default function AbaConfiguracoes() {
         <h2>Código de liderança do {nomeDoGrupo}</h2>
         <p className="texto-ajuda">
           É esta palavra que um novo líder digita para criar o acesso dele. Combine entre a
-          liderança e não mande no grupo dos vendedores — quem tiver o código vira líder e enxerga
+          liderança e não mande no grupo dos vendedores. Quem tiver o código vira líder e enxerga
           tudo do {nomeDoGrupo}. Trocar o código não derruba quem já entrou.
         </p>
         <div className="field">
@@ -305,7 +305,7 @@ export default function AbaConfiguracoes() {
         <h2>Código de cadastro do vendedor</h2>
         <p className="texto-ajuda">
           É esta palavra que a pessoa digita para se cadastrar sozinha como vendedor(a) do{' '}
-          {nomeDoGrupo}, em "Ainda não tenho cadastro". Diferente do código de liderança — quem
+          {nomeDoGrupo}, em "Ainda não tenho cadastro". Diferente do código de liderança, quem
           tiver este código só vira vendedor, nunca líder.
         </p>
         <div className="field">
@@ -377,7 +377,7 @@ export default function AbaConfiguracoes() {
           <h2>Integração por webhook</h2>
           <p className="texto-ajuda">
             Quando um vendedor do {nomeDoGrupo} finaliza (meta fechada), o sistema avisa essa URL
-            automaticamente — uma vez só por vendedor. Deixe em branco pra manter desligado.
+            automaticamente, uma vez só por vendedor. Deixe em branco pra manter desligado.
           </p>
           <div className="field">
             <label htmlFor="cfg-webhook-url">URL do outro sistema</label>
@@ -405,7 +405,7 @@ export default function AbaConfiguracoes() {
               tentar(
                 'webhook',
                 () => salvarWebhook(grupo, { url: webhookUrl, segredo: webhookSegredo }),
-                webhookUrl ? 'Salvo — integração ligada.' : 'Salvo — integração desligada.'
+                webhookUrl ? 'Salvo. Integração ligada.' : 'Salvo. Integração desligada.'
               )
             }
           >

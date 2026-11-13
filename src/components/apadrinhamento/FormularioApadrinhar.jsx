@@ -169,7 +169,7 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
     if (!comprador.trim()) return setErro('Digite o seu nome (lá em cima, em "Seu nome").')
     if (!arquivo) {
       return setErro(
-        'Anexe o comprovante do Pix para concluir — é com ele que a liderança confere o pagamento.'
+        'Anexe o comprovante do Pix para concluir. É com ele que a liderança confere o pagamento.'
       )
     }
     enviandoRef.current = true
@@ -242,7 +242,7 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
           {aviso && <p className="error-text">{aviso}</p>}
           {resultado.comComprovante ? (
             <p className="texto-ajuda">
-              Recebemos o seu comprovante — assim que a liderança conferir, isso já conta pra meta
+              Recebemos o seu comprovante. Assim que a liderança conferir, isso já conta pra meta
               dele(a).
             </p>
           ) : (
@@ -372,8 +372,8 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
                 </>
               )}
               <p className="texto-ajuda" style={{ marginTop: 8 }}>
-                Abra o Pix do seu banco, escolha "Pix Copia e Cola" ou aponte a câmera pro QR Code —
-                o valor de {formatarMoeda(total)} já vem preenchido.
+                Abra o Pix do seu banco, escolha "Pix Copia e Cola" ou aponte a câmera pro QR Code.
+                O valor de {formatarMoeda(total)} já vem preenchido.
               </p>
             </>
           )}
@@ -401,7 +401,7 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
           </BotaoArquivo>
           <p className="texto-ajuda" style={{ marginTop: 6 }}>
             Depois de fazer o Pix, anexe a foto, o print da tela ou o PDF do comprovante. Sem
-            ele não dá pra concluir — é com ele que a liderança confere o pagamento.
+            ele não dá pra concluir, porque é com ele que a liderança confere o pagamento.
           </p>
           {erroArquivo && <p className="error-text">{erroArquivo}</p>}
         </div>

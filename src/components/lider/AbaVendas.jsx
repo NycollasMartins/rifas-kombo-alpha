@@ -132,7 +132,7 @@ export default function AbaVendas() {
               <div className={estilos.comprador}>
                 <strong>{venda.comprador}</strong>
                 <span>
-                  {vendedor ? vendedor.nome : '—'} · {rotuloPagamento(venda.pagamento)}
+                  {vendedor ? vendedor.nome : 'Vendedor não encontrado'} · {rotuloPagamento(venda.pagamento)}
                   {venda.origem === 'propria' && ' · própria'}
                 </span>
               </div>

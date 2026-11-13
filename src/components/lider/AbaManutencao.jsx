@@ -120,7 +120,7 @@ export default function AbaManutencao() {
       {eDev && (
         <div className={estilos.aviso}>
           <strong>Modo dev.</strong> Aqui dá para reescrever dados já registrados. Use quando algo
-          foi lançado errado — não para o dia a dia.
+          foi lançado errado, não no dia a dia.
         </div>
       )}
 
@@ -152,7 +152,7 @@ export default function AbaManutencao() {
               <div className={estilos.dados}>
                 <strong>{venda.comprador}</strong>
                 <span>
-                  {venda.grupo} · {vendedor ? vendedor.nome : '—'} ·{' '}
+                  {venda.grupo} · {vendedor ? vendedor.nome : 'vendedor não encontrado'} ·{' '}
                   {rotuloPagamento(venda.pagamento)} ·{' '}
                   {venda.status === 'pago' ? 'Pago' : 'Pendente'}
                   {venda.origem === 'propria' && ' · compra própria'}

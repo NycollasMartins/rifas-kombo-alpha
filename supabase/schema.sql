@@ -1085,7 +1085,7 @@ begin
     raise exception 'O apadrinhamento é só para o Alpha no momento.';
   end if;
   if v_vendedor.situacao <> 'ativo' then
-    raise exception 'Esse vendedor já não precisa mais de apadrinhamento — muito obrigado pelo carinho!';
+    raise exception 'Esse vendedor já não precisa mais de apadrinhamento. Muito obrigado pelo carinho!';
   end if;
   if not v_vendedor.tem_pix then
     raise exception 'Esse vendedor ainda não cadastrou a chave Pix, então ainda não pode ser apadrinhado.';
@@ -1545,7 +1545,7 @@ begin
              ultimo_erro = case
                when v_status_code = 400
                  then coalesce('Dado em formato errado (400): ' || v_conteudo, 'Dado em formato errado (400).')
-               else 'Segredo incorreto (401) — confira em Configurações.'
+               else 'Segredo incorreto (401). Confira em Configurações.'
              end,
              atualizado_em = now()
        where id = r.id;

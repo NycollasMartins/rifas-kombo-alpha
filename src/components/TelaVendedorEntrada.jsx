@@ -108,7 +108,7 @@ export default function TelaVendedorEntrada({ aoVoltar }) {
           {modo === 'primeiro'
             ? 'Use o mesmo e-mail que você passou para o líder. Se ele ainda não cadastrou você, use "Ainda não tenho cadastro" abaixo.'
             : modo === 'cadastro'
-              ? 'Preencha tudo e informe o código do seu grupo — peça à liderança se não tiver.'
+              ? 'Preencha tudo e informe o código do seu grupo. Se não tiver, peça à liderança.'
               : modo === 'esqueci'
                 ? 'Digite o e-mail da sua conta que enviamos um link para você escolher uma senha nova.'
                 : 'Entre com o e-mail cadastrado e a senha que você criou.'}
@@ -122,7 +122,7 @@ export default function TelaVendedorEntrada({ aoVoltar }) {
             <label className="rotulo-solto">Você é vendedor(a) de qual grupo?</label>
             <SeletorDeGrupo valor={grupo} aoEscolher={setGrupo} desabilitado={ocupado} />
             <p className="texto-ajuda" style={{ marginTop: -8, marginBottom: 16 }}>
-              Pode ser vendedor(a) dos dois — se já usa este e-mail no outro grupo, escolha aqui
+              Pode ser vendedor(a) dos dois. Se já usa este e-mail no outro grupo, escolha aqui
               qual conta quer usar agora.
             </p>
           </>

@@ -87,7 +87,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
     if (!nome.trim()) return setErro('Digite o nome do vendedor.')
     if (!email.trim() || !email.includes('@')) return setErro('Digite um e-mail válido.')
     if (!editando && !telefone.trim()) {
-      return setErro('Digite o telefone do vendedor — é para onde vai o termo de responsabilidade.')
+      return setErro('Digite o telefone do vendedor. É para ele que vai o termo de responsabilidade.')
     }
 
     // chave Pix: confere antes de salvar qualquer coisa, pra não salvar pela metade
@@ -157,7 +157,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
 
         <p className="texto-ajuda">
           Envie o acesso ao app (link, como instalar e como criar a senha) e o termo de
-          responsabilidade. Abre o WhatsApp com o texto pronto — você só confere e aperta enviar.
+          responsabilidade. Abre o WhatsApp com o texto pronto. Você só confere e aperta enviar.
         </p>
 
         <p className="texto-ajuda" style={{ margin: '0 0 6px' }}>
@@ -306,7 +306,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
               value={situacao}
               onChange={(e) => setSituacao(e.target.value)}
             >
-              <option value="ativo">Ativo — vendendo normalmente</option>
+              <option value="ativo">Ativo (vendendo normalmente)</option>
               <option value="quitou">Meta fechada</option>
               <option value="desistiu">Desistiu do acampamento</option>
             </select>
@@ -335,7 +335,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
               <p className="texto-ajuda" style={{ margin: '0 0 8px' }}>
                 {vendedor.temPix
                   ? 'Dá pra corrigir aqui se ele(a) cadastrou errado. Apagar a chave tira ele(a) da lista do apadrinhamento.'
-                  : 'Ainda não cadastrou — sem chave, não aparece na lista do apadrinhamento. Ele(a) mesmo pode cadastrar pelo app, ou você preenche aqui.'}
+                  : 'Ainda não cadastrou. Sem chave, não aparece na lista do apadrinhamento. Ele(a) mesmo pode cadastrar pelo app, ou você preenche aqui.'}
               </p>
               <CamposChavePix valor={pix} aoMudar={setPix} prefixoId="vendedor-pix" />
             </div>
@@ -366,7 +366,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
             <div className="field">
               <label htmlFor="vendedor-nova-senha">Redefinir senha dele(a)</label>
               <p className="texto-ajuda" style={{ margin: '0 0 8px' }}>
-                Cria uma senha nova direto no sistema — não envia nada por e-mail. Avise o
+                Cria uma senha nova direto no sistema, sem enviar nada por e-mail. Avise o
                 vendedor da senha nova por fora.
               </p>
               <input
