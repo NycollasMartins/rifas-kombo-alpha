@@ -1053,6 +1053,7 @@ $$;
  * depois conferindo o comprovante, igual já acontece hoje com qualquer Pix).
  * Sem checar "não pode passar do que falta": se passar um pouco da meta,
  * vira oferta pra igreja — comportamento que já existe e é aceito.
+ * O comprovante é obrigatório (a liderança confere valor x quantidade).
  */
 create or replace function public.registrar_apadrinhamento(
   p_vendedor_id      uuid,
@@ -1088,6 +1089,11 @@ begin
   end if;
   if not v_vendedor.tem_pix then
     raise exception 'Esse vendedor ainda não cadastrou a chave Pix, então ainda não pode ser apadrinhado.';
+  end if;
+  -- o comprovante é obrigatório: é com ele que a liderança confere se o Pix
+  -- chegou e se o valor bate com a quantidade de rifas
+  if coalesce(btrim(p_comprovante_path), '') not like v_vendedor.grupo || '/%' then
+    raise exception 'Anexe o comprovante do Pix para concluir o apadrinhamento.';
   end if;
 
   return query

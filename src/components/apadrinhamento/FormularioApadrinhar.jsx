@@ -70,6 +70,7 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
   // registrar o apadrinhamento duas vezes (rifas em dobro) antes do botão
   // ficar desabilitado na tela
   const enviandoRef = useRef(false)
+  const envioAnterior = useRef(null)
 
   // o Pix vai pra conta do próprio vendedor — chave e titular vêm do cadastro dele
   const [recebedor, setRecebedor] = useState(null)
@@ -166,25 +167,36 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
     if (enviandoRef.current) return
     if (!recebedor) return setErro(erroRecebedor || 'Espere o Pix carregar antes de concluir.')
     if (!comprador.trim()) return setErro('Digite o seu nome (lá em cima, em "Seu nome").')
+    if (!arquivo) {
+      return setErro(
+        'Anexe o comprovante do Pix para concluir — é com ele que a liderança confere o pagamento.'
+      )
+    }
     enviandoRef.current = true
     setErro('')
     setAviso('')
     setEnviando(true)
     try {
-      // O comprovante é opcional: se o envio dele falhar, o apadrinhamento
-      // é registrado do mesmo jeito — perder o registro de quem já pagou o
-      // Pix é muito pior do que ficar sem a foto.
-      let comprovantePath = ''
-      if (arquivo) {
+      // O comprovante é obrigatório: sem ele a liderança não tem como
+      // conferir se o Pix chegou e se o valor bate com a quantidade de rifas.
+      // Se o envio falhar, nada é registrado — a pessoa tenta de novo (o
+      // arquivo continua escolhido).
+      // Se o arquivo já subiu numa tentativa anterior (e o que falhou foi o
+      // registro), reaproveita em vez de enviar outra cópia.
+      let comprovantePath =
+        envioAnterior.current?.arquivo === arquivo ? envioAnterior.current.caminho : ''
+      if (!comprovantePath) {
         try {
           // sem login não dá pra sobrescrever arquivo — e o nome é sempre novo
           comprovantePath = await enviarComprovante(item.grupo, novoLoteId(), arquivo, {
             substituir: false,
           })
-        } catch {
-          setAviso(
-            'Não conseguimos enviar o comprovante (a internet oscilou), mas o apadrinhamento foi registrado. Tente anexar de novo aqui embaixo.'
+          envioAnterior.current = { arquivo, caminho: comprovantePath }
+        } catch (e) {
+          setErro(
+            `Não conseguimos enviar o comprovante: ${e.message || 'confira a internet.'} Toque em "Concluir" de novo.`
           )
+          return
         }
       }
       const criadas = await registrarApadrinhamento({
@@ -368,7 +380,7 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
         </div>
 
         <div className="field">
-          <label>Comprovante do Pix (opcional, mas ajuda a confirmar mais rápido)</label>
+          <label>Comprovante do Pix (obrigatório)</label>
           {arquivo && (
             <div className={estilos.arquivoEscolhido}>
               {previa ? (
@@ -388,7 +400,8 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
             {arquivo ? 'Trocar arquivo' : '📎 Anexar comprovante'}
           </BotaoArquivo>
           <p className="texto-ajuda" style={{ marginTop: 6 }}>
-            Foto, print da tela ou PDF do comprovante.
+            Depois de fazer o Pix, anexe a foto, o print da tela ou o PDF do comprovante. Sem
+            ele não dá pra concluir — é com ele que a liderança confere o pagamento.
           </p>
           {erroArquivo && <p className="error-text">{erroArquivo}</p>}
         </div>
