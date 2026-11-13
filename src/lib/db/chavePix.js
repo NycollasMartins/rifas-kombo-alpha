@@ -1,4 +1,4 @@
-import { supabase } from '../supabase'
+import { supabase, supabasePublico } from '../supabase'
 import { traduzirErro } from './erros'
 
 /**
@@ -35,7 +35,7 @@ export async function salvarMinhaChavePix({ tipo, chave, titular }, grupo) {
 
 /** Pro formulário público: a chave de quem a pessoa escolheu apadrinhar. */
 export async function buscarPixParaApadrinhar(vendedorId) {
-  const { data, error } = await supabase.rpc('pix_para_apadrinhar', { p_vendedor_id: vendedorId })
+  const { data, error } = await supabasePublico.rpc('pix_para_apadrinhar', { p_vendedor_id: vendedorId })
   if (error) throw new Error(traduzirErro(error, 'Não foi possível carregar o Pix.'))
   const linha = (data || [])[0]
   if (!linha?.chave) {

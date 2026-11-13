@@ -1,4 +1,4 @@
-import { supabase } from '../supabase'
+import { supabasePublico as supabase } from '../supabase'
 import { traduzirErro } from './erros'
 import { mapearVenda } from './vendas'
 

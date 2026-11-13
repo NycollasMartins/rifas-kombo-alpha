@@ -74,3 +74,23 @@ export const supabase = supabaseConfigurado
       },
     })
   : null
+
+/**
+ * Cliente "sem login" só pro formulário público de apadrinhamento.
+ *
+ * Se a pessoa que vai apadrinhar já usa o app no mesmo celular (um vendedor
+ * ou líder do Kombo, por exemplo), o cliente normal mandaria o login DELA
+ * junto, e o banco aplicaria as regras de quem está logado em vez das de
+ * quem não tem conta: o envio do comprovante era recusado. Este cliente
+ * nunca lê nem guarda sessão nenhuma, então sempre fala como "visitante".
+ */
+export const supabasePublico = supabaseConfigurado
+  ? createClient(url, chaveAnon, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+        storageKey: 'rifas-apadrinhamento-publico',
+      },
+    })
+  : null

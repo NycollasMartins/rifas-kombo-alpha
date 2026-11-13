@@ -1,4 +1,4 @@
-import { supabase } from '../supabase'
+import { supabase, supabasePublico } from '../supabase'
 import { traduzirErro } from './erros'
 
 /**
@@ -176,17 +176,21 @@ function naoAdiantaRepetir(error) {
  * de desistir. Se a primeira tentativa chegou mas a resposta se perdeu, a
  * segunda volta "já existe" — e isso conta como enviado.
  */
-async function enviar(bucket, caminho, arquivo, { substituir = true } = {}) {
+async function enviar(bucket, caminho, arquivo, { substituir = true, publico = false } = {}) {
+  const cliente = publico ? supabasePublico : supabase
   const pronto = await prepararArquivo(arquivo)
   // fotos tiradas direto da câmera às vezes chegam sem "type" — sem um
   // Content-Type válido, o Storage recusa o envio com "No content provided"
-  const tipo = tipoDo(pronto) || 'application/octet-stream'
+  // sem tipo nenhum e sem extensão conhecida: é foto de câmera (o único
+  // caso que passa na validação assim). O Storage só aceita foto ou PDF.
+  const tipoReal = tipoDo(pronto)
+  const tipo = tipoReal && tipoReal !== 'application/octet-stream' ? tipoReal : 'image/jpeg'
 
   let ultimoErro = null
   for (let tentativa = 1; tentativa <= 3; tentativa++) {
     let error
     try {
-      ;({ error } = await supabase.storage
+      ;({ error } = await cliente.storage
         .from(bucket)
         .upload(caminho, pronto, { upsert: substituir, contentType: tipo }))
     } catch (e) {

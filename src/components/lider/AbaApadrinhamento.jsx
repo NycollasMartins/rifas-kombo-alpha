@@ -18,15 +18,18 @@ import estilos from './AbaApadrinhamento.module.css'
  * reunido numa lista só, em vez de misturado com todas as outras vendas.
  */
 export default function AbaApadrinhamento() {
-  const { config, vendas, buscarVendedor, mudarStatusVenda } = useDadosRifa()
+  const { config, vendas, buscarVendedor, mudarStatusDoLote, removerLote } = useDadosRifa()
   const [vendoLote, setVendoLote] = useState(null)
   const [confirmando, setConfirmando] = useState('')
   const [erro, setErro] = useState('')
 
-  const lotes = useMemo(
-    () => agruparPorLote(vendas.filter((v) => v.origem === 'apadrinhamento')),
-    [vendas]
-  )
+  // os que ainda precisam ser conferidos vêm primeiro
+  const lotes = useMemo(() => {
+    const todos = agruparPorLote(vendas.filter((v) => v.origem === 'apadrinhamento'))
+    const pendente = (l) => l.rifas.some((r) => r.status === 'pendente')
+    return [...todos.filter(pendente), ...todos.filter((l) => !pendente(l))]
+  }, [vendas])
+  const qtdPendentes = lotes.filter((l) => l.rifas.some((r) => r.status === 'pendente')).length
 
   const totalConfirmado = useMemo(
     () =>
@@ -39,10 +42,11 @@ export default function AbaApadrinhamento() {
   )
 
   async function confirmarPagamento(lote) {
+    if (confirmando) return
     setErro('')
     setConfirmando(lote.loteId)
     try {
-      await Promise.all(lote.rifas.map((r) => mudarStatusVenda(r.id, 'pago')))
+      await mudarStatusDoLote(lote.loteId, 'pago')
     } catch (e) {
       setErro(traduzirErro(e, 'Não foi possível confirmar o pagamento.'))
     } finally {
@@ -50,10 +54,40 @@ export default function AbaApadrinhamento() {
     }
   }
 
+  // comprovante falso, de outro valor ou Pix que nunca chegou: apaga as
+  // rifas desse apadrinhamento (e o vendedor volta a aparecer na lista)
+  async function recusar(lote, valor) {
+    if (confirmando) return
+    const v = lote.primeira
+    const ok = window.confirm(
+      `Recusar o apadrinhamento de ${v.comprador} (${lote.rifas.length} rifa(s), ${formatarMoeda(valor)})?\n\n` +
+        'As rifas desse apadrinhamento serão apagadas. Use quando o Pix não chegou ou o comprovante não confere.'
+    )
+    if (!ok) return
+    setErro('')
+    setConfirmando(lote.loteId)
+    try {
+      await removerLote(lote.loteId)
+      setVendoLote((atual) => (atual?.loteId === lote.loteId ? null : atual))
+    } catch (e) {
+      setErro(traduzirErro(e, 'Não foi possível recusar este apadrinhamento.'))
+    } finally {
+      setConfirmando('')
+    }
+  }
+
+  function valorDoLote(lote) {
+    const vendedor = buscarVendedor(lote.primeira.vendedorId)
+    return lote.rifas.length * (vendedor ? precoDoVendedor(vendedor, config) : 0)
+  }
+
   return (
     <>
       <div className="section-head">
-        <h2>Apadrinhamento ({lotes.length})</h2>
+        <h2>
+          Apadrinhamento ({lotes.length}
+          {qtdPendentes > 0 ? `, ${qtdPendentes} para conferir` : ''})
+        </h2>
       </div>
 
       {lotes.length > 0 && (
@@ -79,7 +113,7 @@ export default function AbaApadrinhamento() {
           {lotes.map((lote) => {
             const v = lote.primeira
             const vendedor = buscarVendedor(v.vendedorId)
-            const valor = lote.rifas.length * (vendedor ? precoDoVendedor(vendedor, config) : 0)
+            const valor = valorDoLote(lote)
             return (
               <div key={lote.loteId} className={estilos.item}>
                 <div className={estilos.topo}>
@@ -115,13 +149,22 @@ export default function AbaApadrinhamento() {
                     <span className={estilos.semComprovante}>Sem comprovante anexado</span>
                   )}
                   {v.status === 'pendente' && (
-                    <button
-                      className="btn btn-sm btn-primary"
-                      onClick={() => confirmarPagamento(lote)}
-                      disabled={confirmando === lote.loteId}
-                    >
-                      {confirmando === lote.loteId ? 'Confirmando…' : 'Confirmar pagamento'}
-                    </button>
+                    <>
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={() => confirmarPagamento(lote)}
+                        disabled={Boolean(confirmando)}
+                      >
+                        {confirmando === lote.loteId ? 'Salvando…' : 'Confirmar pagamento'}
+                      </button>
+                      <button
+                        className="btn-ghost btn-sm btn-danger"
+                        onClick={() => recusar(lote, valor)}
+                        disabled={Boolean(confirmando)}
+                      >
+                        Recusar
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -134,8 +177,10 @@ export default function AbaApadrinhamento() {
         <ComprovanteDoLote
           lote={vendas.length ? lotes.find((l) => l.loteId === vendoLote.loteId) || vendoLote : vendoLote}
           vendedor={buscarVendedor(vendoLote.primeira.vendedorId)}
+          valor={valorDoLote(vendoLote)}
           confirmando={confirmando === vendoLote.loteId}
           aoConfirmar={confirmarPagamento}
+          aoRecusar={recusar}
           aoFechar={() => setVendoLote(null)}
         />
       )}
@@ -144,7 +189,7 @@ export default function AbaApadrinhamento() {
 }
 
 /** O comprovante de um apadrinhamento, já com o botão de confirmar ali mesmo. */
-function ComprovanteDoLote({ lote, vendedor, confirmando, aoConfirmar, aoFechar }) {
+function ComprovanteDoLote({ lote, vendedor, valor, confirmando, aoConfirmar, aoRecusar, aoFechar }) {
   const v = lote.primeira
   const pendente = lote.rifas.some((r) => r.status === 'pendente')
   return (
@@ -155,17 +200,35 @@ function ComprovanteDoLote({ lote, vendedor, confirmando, aoConfirmar, aoFechar 
           <strong>{v.comprador}</strong> apadrinhou{' '}
           <strong>{vendedor ? vendedor.nome : '(vendedor removido)'}</strong> ·{' '}
           {lote.rifas.length} rifa{lote.rifas.length > 1 ? 's' : ''}
+          <br />
+          Confira se o comprovante é de <strong>{formatarMoeda(valor)}</strong>
+          {vendedor ? (
+            <>
+              {' '}
+              e se o Pix foi para a conta de <strong>{vendedor.nome}</strong> (ou do responsável)
+            </>
+          ) : null}
+          .
         </>
       }
       acoes={
         pendente ? (
-          <button
-            className="btn btn-primary btn-block"
-            onClick={() => aoConfirmar(lote)}
-            disabled={confirmando}
-          >
-            {confirmando ? 'Confirmando…' : 'Confirmar pagamento'}
-          </button>
+          <>
+            <button
+              className="btn btn-primary btn-block"
+              onClick={() => aoConfirmar(lote)}
+              disabled={confirmando}
+            >
+              {confirmando ? 'Salvando…' : 'Confirmar pagamento'}
+            </button>
+            <button
+              className="btn btn-block btn-danger"
+              onClick={() => aoRecusar(lote, valor)}
+              disabled={confirmando}
+            >
+              Recusar (não confere)
+            </button>
+          </>
         ) : (
           <span className="tag tag-good" style={{ alignSelf: 'center' }}>
             Pago ✓

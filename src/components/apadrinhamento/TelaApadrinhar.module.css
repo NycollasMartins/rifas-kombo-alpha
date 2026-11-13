@@ -214,3 +214,13 @@
   margin: 12px 0 16px;
   text-align: left;
 }
+
+.resumoFinal {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 1.45;
+}

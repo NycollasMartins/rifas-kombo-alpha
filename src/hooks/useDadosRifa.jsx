@@ -10,9 +10,11 @@ import {
 } from '../lib/db/vendedores'
 import {
   atualizarRepasseVenda,
+  atualizarStatusDoLote,
   atualizarStatusVenda,
   completarLote,
   corrigirVenda,
+  excluirLote,
   excluirVenda,
   listarVendas,
   mapearVenda,
@@ -258,6 +260,17 @@ export function ProvedorDadosRifa({ children }) {
       async mudarStatusVenda(id, status) {
         const atualizada = await atualizarStatusVenda(id, status)
         setTodasVendas((a) => mesclar(a, atualizada))
+      },
+
+      async mudarStatusDoLote(loteId, status) {
+        const atualizadas = await atualizarStatusDoLote(loteId, status)
+        setTodasVendas((atual) => atualizadas.reduce(mesclar, atual))
+        return atualizadas
+      },
+
+      async removerLote(loteId) {
+        await excluirLote(loteId)
+        setTodasVendas((a) => a.filter((v) => v.loteId !== loteId))
       },
 
       async mudarRepasseVenda(id, repasse) {

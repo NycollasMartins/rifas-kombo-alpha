@@ -359,6 +359,7 @@ create table if not exists public.vendas (
 create index if not exists vendas_vendedor_idx on public.vendas (vendedor_id);
 create index if not exists vendas_grupo_idx    on public.vendas (grupo);
 create index if not exists vendas_lote_idx     on public.vendas (lote_id);
+create index if not exists vendas_comprovante_idx on public.vendas (comprovante_path);
 
 -- "apadrinhamento": rifa comprada por alguém de fora pro vendedor, pelo
 -- formulário público — ver seção 6-B
@@ -1069,12 +1070,23 @@ as $$
 declare
   v_vendedor public.vendedores%rowtype;
   v_lote     uuid := gen_random_uuid();
+  v_path     text := btrim(coalesce(p_comprovante_path, ''));
+  v_etag     text;
+  v_digitos  text := regexp_replace(coalesce(p_telefone, ''), '[^0-9]', '', 'g');
 begin
   if p_quantidade is null or p_quantidade < 1 or p_quantidade > 50 then
     raise exception 'A quantidade precisa ser de 1 a 50 rifas.';
   end if;
-  if length(btrim(coalesce(p_comprador, ''))) = 0 then
-    raise exception 'Digite o nome do comprador.';
+  if length(btrim(coalesce(p_comprador, ''))) < 3
+     or btrim(p_comprador) !~ '[[:alpha:]]' then
+    raise exception 'Digite o seu nome completo.';
+  end if;
+  if length(btrim(p_comprador)) > 120 then
+    raise exception 'O nome passou do tamanho máximo.';
+  end if;
+  if length(btrim(coalesce(p_telefone, ''))) > 0
+     and (length(v_digitos) < 10 or length(v_digitos) > 13) then
+    raise exception 'Confira o telefone: coloque o DDD e o número.';
   end if;
 
   select * into v_vendedor from public.vendedores where id = p_vendedor_id;
@@ -1092,15 +1104,63 @@ begin
   end if;
   -- o comprovante é obrigatório: é com ele que a liderança confere se o Pix
   -- chegou e se o valor bate com a quantidade de rifas
-  if coalesce(btrim(p_comprovante_path), '') not like v_vendedor.grupo || '/%' then
+  if v_path not like v_vendedor.grupo || '/%' then
     raise exception 'Anexe o comprovante do Pix para concluir o apadrinhamento.';
+  end if;
+
+  -- e o arquivo precisa existir de verdade (sem isso, dava pra chamar a
+  -- função direto pela API com um nome de arquivo inventado)
+  select o.metadata->>'eTag' into v_etag
+    from storage.objects o
+   where o.bucket_id = 'comprovantes' and o.name = v_path;
+  if not found then
+    raise exception 'Não encontramos o comprovante enviado. Anexe o arquivo de novo.';
+  end if;
+
+  -- dois toques/tentativas com o mesmo arquivo chegando juntos entram um
+  -- de cada vez, pra conferência logo abaixo valer
+  perform pg_advisory_xact_lock(hashtext('rifas:comprovante:' || v_path));
+
+  -- Mesmo comprovante chegando de novo = a pessoa tocou em "Concluir" outra
+  -- vez porque a internet caiu antes da resposta. Devolve o que já foi
+  -- registrado, em vez de registrar as rifas em dobro.
+  if exists (select 1 from public.vendas where comprovante_path = v_path) then
+    if exists (select 1 from public.vendas
+                where comprovante_path = v_path
+                  and (origem <> 'apadrinhamento' or vendedor_id <> v_vendedor.id)) then
+      raise exception 'Esse comprovante já foi usado em outra compra.';
+    end if;
+    return query select * from public.vendas where comprovante_path = v_path order by numero;
+    return;
+  end if;
+
+  -- O mesmo arquivo (mesmo conteúdo, mesmo com outro nome) não vale pra dois
+  -- registros: cada Pix vai pra chave de um vendedor só, então um comprovante
+  -- só pode comprovar uma compra.
+  if v_etag is not null and exists (
+    select 1
+      from storage.objects o
+      join public.vendas v on v.comprovante_path = o.name
+     where o.bucket_id = 'comprovantes'
+       and o.metadata->>'eTag' = v_etag
+       and v.grupo = v_vendedor.grupo
+  ) then
+    raise exception 'Esse comprovante já foi usado em outro apadrinhamento.'
+      using hint = 'Anexe o comprovante deste Pix. Se acha que é um engano, fale com a liderança.';
+  end if;
+
+  -- trava contra robô: o formulário é público, então limita quantos
+  -- apadrinhamentos entram em pouco tempo (o normal é uns 25 por dia)
+  if (select count(distinct lote_id) from public.vendas
+       where origem = 'apadrinhamento' and data > now() - interval '10 minutes') >= 30 then
+    raise exception 'Muitos apadrinhamentos ao mesmo tempo. Espere alguns minutos e toque em "Concluir" de novo.';
   end if;
 
   return query
   insert into public.vendas
     (vendedor_id, lote_id, comprador, telefone, pagamento, comprovante_path, status, origem, grupo, numero)
   select v_vendedor.id, v_lote, btrim(p_comprador), nullif(btrim(coalesce(p_telefone, '')), ''),
-         'pix', nullif(btrim(coalesce(p_comprovante_path, '')), ''), 'pendente', 'apadrinhamento',
+         'pix', v_path, 'pendente', 'apadrinhamento',
          v_vendedor.grupo, 0        -- grupo e numero são reescritos pelo gatilho
   from generate_series(1, p_quantidade)
   returning *;
@@ -1134,6 +1194,21 @@ begin
   end if;
   if coalesce(p_comprovante_path, '') not like v_grupo || '/%' then
     raise exception 'Comprovante inválido.';
+  end if;
+  if not exists (select 1 from storage.objects
+                  where bucket_id = 'comprovantes' and name = p_comprovante_path) then
+    raise exception 'Não encontramos o comprovante enviado. Anexe o arquivo de novo.';
+  end if;
+  if exists (
+    select 1
+      from storage.objects novo
+      join storage.objects o on o.bucket_id = 'comprovantes'
+                            and o.metadata->>'eTag' = novo.metadata->>'eTag'
+      join public.vendas v on v.comprovante_path = o.name
+     where novo.bucket_id = 'comprovantes' and novo.name = p_comprovante_path
+       and v.grupo = v_grupo
+  ) then
+    raise exception 'Esse comprovante já foi usado em outro apadrinhamento.';
   end if;
 
   update public.vendas
@@ -1875,6 +1950,12 @@ begin
     on conflict (id) do update set public = false;
   insert into storage.buckets (id, name, public) values ('comprovantes', 'comprovantes', false)
     on conflict (id) do update set public = false;
+  -- comprovante é foto ou PDF de até 10 MB; qualquer outra coisa o Storage
+  -- recusa antes de gravar (o formulário de apadrinhar é público)
+  update storage.buckets
+     set file_size_limit = 10485760,
+         allowed_mime_types = array['image/*', 'application/pdf']
+   where id = 'comprovantes';
 
   execute 'drop policy if exists "termos: liderança do grupo" on storage.objects';
   execute 'drop policy if exists "comprovantes: do meu grupo" on storage.objects';
@@ -1912,11 +1993,13 @@ begin
   -- quem apadrinha não faz login nenhum, mas consegue ENVIAR o comprovante
   -- (nunca listar/abrir o de ninguém — isso continua só pra liderança, na
   -- política acima)
+  -- só na pasta do Alpha (o apadrinhamento é só do Alpha) e só no formato de
+  -- nome que o app gera: "Alpha/<código>.<extensão>", sem subpastas
   execute $p$create policy "comprovantes: apadrinhamento anonimo envia"
     on storage.objects for insert to anon
     with check (
       bucket_id = 'comprovantes'
-      and (storage.foldername(name))[1] in ('Alpha', 'Kombo')
+      and name ~ '^Alpha/[A-Za-z0-9-]{8,64}\.(jpg|jpeg|jfif|png|webp|gif|heic|heif|bmp|pdf)$'
     )$p$;
 
 exception when others then

@@ -119,6 +119,27 @@ export async function corrigirVenda(id, dados) {
   return mapearVenda(linha)
 }
 
+/**
+ * Muda o status de TODAS as rifas de uma compra num pedido só. Antes era um
+ * pedido por rifa: se a internet caísse no meio, metade ficava "pago" e
+ * metade "pendente".
+ */
+export async function atualizarStatusDoLote(loteId, status) {
+  const linhas = verificar(
+    await supabase.from('vendas').update({ status }).eq('lote_id', loteId).select(),
+    'Não foi possível mudar o status desta compra.'
+  )
+  return (linhas || []).map(mapearVenda)
+}
+
+/** Apaga todas as rifas de uma compra (ex: apadrinhamento recusado). */
+export async function excluirLote(loteId) {
+  verificar(
+    await supabase.from('vendas').delete().eq('lote_id', loteId),
+    'Não foi possível excluir esta compra.'
+  )
+}
+
 export async function excluirVenda(id) {
   verificar(await supabase.from('vendas').delete().eq('id', id), 'Não foi possível excluir a venda.')
 }

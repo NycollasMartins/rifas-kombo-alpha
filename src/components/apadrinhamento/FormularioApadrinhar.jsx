@@ -15,7 +15,7 @@ import { segurarAtualizacao } from '../../utils/atualizacoes'
 import { apagarRascunho, lerRascunho, salvarRascunho } from '../../utils/rascunhoApadrinhamento'
 import estilos from './TelaApadrinhar.module.css'
 
-/** Passo 2: quantidade, dados do comprador, Pix e comprovante opcional. */
+/** Passo 2: quantidade, dados do comprador, Pix e comprovante (obrigatório). */
 export default function FormularioApadrinhar({ item, aoVoltar }) {
   const maximo = Math.max(1, Math.min(50, Math.ceil(item.disponivel / item.preco)))
 
@@ -152,6 +152,7 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
     try {
       const caminho = await enviarComprovante(item.grupo, novoLoteId(), escolhido, {
         substituir: false,
+        publico: true,
       })
       await anexarComprovanteDoApadrinhamento(resultado.loteId, caminho)
       setAviso('')
@@ -166,7 +167,14 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
   async function concluir() {
     if (enviandoRef.current) return
     if (!recebedor) return setErro(erroRecebedor || 'Espere o Pix carregar antes de concluir.')
-    if (!comprador.trim()) return setErro('Digite o seu nome (lá em cima, em "Seu nome").')
+    const nome = comprador.trim()
+    if (nome.length < 3 || !/\p{L}/u.test(nome)) {
+      return setErro('Digite o seu nome completo (lá em cima, em "Seu nome").')
+    }
+    const digitos = telefone.replace(/\D/g, '')
+    if (telefone.trim() && (digitos.length < 10 || digitos.length > 13)) {
+      return setErro('Confira o telefone: coloque o DDD e o número, ou deixe em branco.')
+    }
     if (!arquivo) {
       return setErro(
         'Anexe o comprovante do Pix para concluir. É com ele que a liderança confere o pagamento.'
@@ -190,6 +198,7 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
           // sem login não dá pra sobrescrever arquivo — e o nome é sempre novo
           comprovantePath = await enviarComprovante(item.grupo, novoLoteId(), arquivo, {
             substituir: false,
+            publico: true,
           })
           envioAnterior.current = { arquivo, caminho: comprovantePath }
         } catch (e) {
@@ -213,6 +222,8 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
         comComprovante: Boolean(comprovantePath),
       })
     } catch (e) {
+      // o banco não achou o arquivo: na próxima tentativa envia de novo
+      if (/não encontramos o comprovante/i.test(e.message || '')) envioAnterior.current = null
       setErro(traduzirErro(e, e.message))
     } finally {
       enviandoRef.current = false
@@ -405,6 +416,12 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
           </p>
           {erroArquivo && <p className="error-text">{erroArquivo}</p>}
         </div>
+
+        <p className={estilos.resumoFinal}>
+          Você vai registrar <strong>{quantidade} rifa{quantidade > 1 ? 's' : ''}</strong> para{' '}
+          {item.nome}, no valor de <strong>{formatarMoeda(total)}</strong>. O comprovante anexado
+          precisa ser de um Pix desse valor.
+        </p>
 
         {erro && (
           <p className="error-text" style={{ marginTop: 16 }}>
