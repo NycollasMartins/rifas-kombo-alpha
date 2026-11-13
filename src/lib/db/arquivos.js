@@ -18,7 +18,9 @@ export function validarArquivo(arquivo) {
   if (arquivo.size > TAMANHO_MAXIMO) {
     return 'O arquivo passa de 10 MB. Tire a foto com menos qualidade ou reduza o PDF.'
   }
-  if (arquivo.type && !TIPOS_ACEITOS.includes(arquivo.type)) {
+  // qualquer foto vale: alguns celulares mandam "image/heif" ou "image/jpg",
+  // que não estavam na lista e eram recusados sem motivo
+  if (arquivo.type && !arquivo.type.startsWith('image/') && !TIPOS_ACEITOS.includes(arquivo.type)) {
     return 'Envie um PDF ou uma foto (JPG, PNG).'
   }
   return ''

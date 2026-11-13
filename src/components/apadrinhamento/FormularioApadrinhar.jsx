@@ -29,6 +29,8 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
   const [copiado, setCopiado] = useState(false)
   const [erro, setErro] = useState('')
   const [aviso, setAviso] = useState('')
+  const [erroArquivo, setErroArquivo] = useState('')
+  const [mostrarCodigo, setMostrarCodigo] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [resultado, setResultado] = useState(null)
 
@@ -47,6 +49,11 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
 
   const inputArquivo = useRef(null)
   const canvasRef = useRef(null)
+  const codigoRef = useRef(null)
+  // trava contra toque duplo no "Concluir": dois toques rápidos chegavam a
+  // registrar o apadrinhamento duas vezes (rifas em dobro) antes do botão
+  // ficar desabilitado na tela
+  const enviandoRef = useRef(false)
 
   // o Pix vai pra conta do próprio vendedor — chave e titular vêm do cadastro dele
   const [recebedor, setRecebedor] = useState(null)
@@ -91,24 +98,43 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
     evento.target.value = ''
     if (!escolhido) return
     const problema = validarArquivo(escolhido)
-    if (problema) return setErro(problema)
-    setErro('')
+    if (problema) {
+      setArquivo(null)
+      return setErroArquivo(problema)
+    }
+    setErroArquivo('')
     setArquivo(escolhido)
   }
 
+  // Quem abre o link pelo WhatsApp/Instagram cai no navegador embutido
+  // deles, que muitas vezes bloqueia a cópia automática. Tenta os dois
+  // jeitos; se nenhum funcionar, mostra o código na tela, já selecionado,
+  // pra pessoa copiar segurando o dedo.
   async function copiarPix() {
+    let deu = false
     try {
       await navigator.clipboard.writeText(pix)
+      deu = true
+    } catch {
+      deu = copiarDoJeitoAntigo(pix)
+    }
+    if (deu) {
       setCopiado(true)
       setTimeout(() => setCopiado(false), 2000)
-    } catch {
-      setErro('Não deu pra copiar sozinho — selecione e copie o código manualmente.')
+      return
     }
+    setMostrarCodigo(true)
+    setTimeout(() => {
+      codigoRef.current?.focus()
+      codigoRef.current?.select()
+    }, 50)
   }
 
   async function concluir() {
+    if (enviandoRef.current) return
     if (!recebedor) return setErro(erroRecebedor || 'Espere o Pix carregar antes de concluir.')
-    if (!comprador.trim()) return setErro('Digite o seu nome.')
+    if (!comprador.trim()) return setErro('Digite o seu nome (lá em cima, em "Seu nome").')
+    enviandoRef.current = true
     setErro('')
     setAviso('')
     setEnviando(true)
@@ -141,6 +167,7 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
     } catch (e) {
       setErro(traduzirErro(e, e.message))
     } finally {
+      enviandoRef.current = false
       setEnviando(false)
     }
   }
@@ -180,6 +207,17 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
               <button type="button" className="btn btn-block" onClick={copiarPix} style={{ marginBottom: 10 }}>
                 {copiado ? 'Copiado!' : 'Copiar código Pix de novo'}
               </button>
+              {mostrarCodigo && (
+                <textarea
+                  ref={codigoRef}
+                  className={estilos.codigoPix}
+                  value={pix}
+                  readOnly
+                  rows={4}
+                  style={{ marginBottom: 10 }}
+                  onFocus={(e) => e.target.select()}
+                />
+              )}
             </>
           )}
           <button className="btn btn-primary btn-block" onClick={() => window.location.reload()}>
@@ -200,8 +238,6 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
           Faltam {formatarMoeda(item.disponivel)} pra ele(a) completar a meta.
         </p>
 
-        {erro && <p className="error-text">{erro}</p>}
-
         <label className="rotulo-solto">Quantas rifas você quer apadrinhar?</label>
         <div className={estilos.seletorQuantidade}>
           <button type="button" className="btn btn-sm" onClick={() => ajustar(-1)} disabled={quantidade <= 1}>
@@ -220,6 +256,8 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
             id="apadrinhar-nome"
             value={comprador}
             onChange={(e) => setComprador(e.target.value)}
+            maxLength={80}
+            autoComplete="name"
             placeholder="Nome completo"
           />
         </div>
@@ -229,6 +267,8 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
             id="apadrinhar-telefone"
             type="tel"
             inputMode="tel"
+            maxLength={20}
+            autoComplete="tel"
             placeholder="(00) 00000-0000"
             value={telefone}
             onChange={(e) => setTelefone(e.target.value)}
@@ -251,6 +291,22 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
               <button type="button" className="btn btn-sm" onClick={copiarPix}>
                 {copiado ? 'Copiado!' : 'Copiar código Pix'}
               </button>
+              {mostrarCodigo && (
+                <>
+                  <p className="texto-ajuda" style={{ marginTop: 8 }}>
+                    Seu navegador não deixou copiar sozinho. Segure o dedo no código abaixo e
+                    toque em "Copiar":
+                  </p>
+                  <textarea
+                    ref={codigoRef}
+                    className={estilos.codigoPix}
+                    value={pix}
+                    readOnly
+                    rows={4}
+                    onFocus={(e) => e.target.select()}
+                  />
+                </>
+              )}
               <p className="texto-ajuda" style={{ marginTop: 8 }}>
                 Abra o Pix do seu banco, escolha "Pix Copia e Cola" ou aponte a câmera pro QR Code —
                 o valor de {formatarMoeda(total)} já vem preenchido.
@@ -265,6 +321,7 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
           <button type="button" className="btn btn-sm" onClick={() => inputArquivo.current?.click()}>
             {arquivo ? 'Trocar foto' : 'Anexar comprovante'}
           </button>
+          {erroArquivo && <p className="error-text">{erroArquivo}</p>}
           <input
             ref={inputArquivo}
             type="file"
@@ -273,6 +330,12 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
             hidden
           />
         </div>
+
+        {erro && (
+          <p className="error-text" style={{ marginTop: 16 }}>
+            {erro}
+          </p>
+        )}
 
         <button
           className="btn btn-primary btn-block"
@@ -285,4 +348,23 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
       </div>
     </div>
   )
+}
+
+/** Cópia pelo jeito antigo (execCommand), que ainda funciona em navegador embutido. */
+function copiarDoJeitoAntigo(texto) {
+  try {
+    const campo = document.createElement('textarea')
+    campo.value = texto
+    campo.setAttribute('readonly', '')
+    campo.style.position = 'fixed'
+    campo.style.opacity = '0'
+    document.body.appendChild(campo)
+    campo.select()
+    campo.setSelectionRange(0, texto.length)
+    const deu = document.execCommand('copy')
+    document.body.removeChild(campo)
+    return deu
+  } catch {
+    return false
+  }
 }

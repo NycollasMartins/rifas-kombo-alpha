@@ -109,7 +109,14 @@ export default function TelaApadrinhar() {
       )}
 
       {carregando && <p className="texto-ajuda">Carregando…</p>}
-      {erro && <p className="error-text">{erro}</p>}
+      {erro && (
+        <>
+          <p className="error-text">{erro}</p>
+          <button className="btn btn-block" onClick={atualizarLista}>
+            Tentar de novo
+          </button>
+        </>
+      )}
 
       {!carregando && !erro && comConta.length === 0 && (
         <EstadoVazio icone="🎉">

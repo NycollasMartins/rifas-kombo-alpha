@@ -161,3 +161,17 @@
   border-radius: 999px;
   font-size: 14px;
 }
+
+.codigoPix {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-panel);
+  color: inherit;
+  font-family: ui-monospace, monospace;
+  font-size: 11.5px;
+  word-break: break-all;
+  resize: none;
+}
