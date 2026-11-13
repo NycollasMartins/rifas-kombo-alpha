@@ -53,8 +53,10 @@ export default function AbaVendedores() {
 
   // chave Pix só importa no Alpha (é pra onde vai o apadrinhamento)
   const pedePix = grupo === ALPHA
+  // só conta quem ainda está vendendo: quem já fechou a meta (ou desistiu)
+  // não precisa mais de apadrinhamento, então não precisa de chave Pix
   const contagemPix = useMemo(() => {
-    const quemConta = todosDoGrupo.filter((v) => v.situacao !== 'desistiu')
+    const quemConta = todosDoGrupo.filter((v) => v.situacao === 'ativo')
     return { com: quemConta.filter((v) => v.temPix).length, total: quemConta.length }
   }, [todosDoGrupo])
 
@@ -63,7 +65,9 @@ export default function AbaVendedores() {
       vendedores.filter(
         (v) =>
           (!filtroTipo || v.tipo === filtroTipo) &&
-          (!pedePix || !filtroPix || (filtroPix === 'com' ? v.temPix : !v.temPix))
+          (!pedePix ||
+            !filtroPix ||
+            (filtroPix === 'com' ? v.temPix : v.situacao === 'ativo' && !v.temPix))
       ),
     [vendedores, filtroTipo, filtroPix, pedePix]
   )
@@ -267,13 +271,13 @@ export default function AbaVendedores() {
                     {vendedor.tipo === 'voluntario' && <span className="tag">Voluntário</span>}
                     {!temTermo && <span className={estilos.alerta}>sem termo</span>}
                     {!vendedor.temSenha && <span className={estilos.alerta}>não entrou ainda</span>}
-                    {pedePix &&
-                      vendedor.situacao !== 'desistiu' &&
-                      (vendedor.temPix ? (
-                        <span className="tag tag-good">Pix ✓</span>
-                      ) : (
-                        <span className={estilos.alerta}>sem Pix</span>
-                      ))}
+                    {pedePix && vendedor.situacao !== 'desistiu' && vendedor.temPix && (
+                      <span className="tag tag-good">Pix ✓</span>
+                    )}
+                    {/* só cobra de quem ainda está vendendo — quem já fechou a meta não precisa */}
+                    {pedePix && vendedor.situacao === 'ativo' && !vendedor.temPix && (
+                      <span className={estilos.alerta}>sem Pix</span>
+                    )}
                   </div>
                   <div className={estilos.detalhe}>
                     {vendedor.email}
