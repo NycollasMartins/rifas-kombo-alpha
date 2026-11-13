@@ -23,18 +23,47 @@ async function versaoNoAr() {
 
 const INTERVALO_MS = 60_000 // confere a cada 1 minuto
 
+/**
+ * Enquanto alguém está preenchendo algo (modal aberto, formulário do
+ * apadrinhamento), recarregar sozinho apaga tudo que foi digitado — e o
+ * momento mais comum disso é justamente a volta do app do banco depois de
+ * pagar o Pix. Quem tem formulário chama segurarAtualizacao() e devolve a
+ * função que ela retorna quando terminar; a versão nova fica esperando e
+ * entra na próxima conferida em que ninguém estiver segurando.
+ */
+let segurando = 0
+
+export function segurarAtualizacao() {
+  segurando += 1
+  let solto = false
+  return () => {
+    if (solto) return
+    solto = true
+    segurando -= 1
+  }
+}
+
+let versaoInicial = ''
+
+/** Pro "puxar pra atualizar": diz se já saiu um deploy novo. */
+export async function existeVersaoNova() {
+  if (!versaoInicial) return false
+  try {
+    const noAr = await versaoNoAr()
+    return Boolean(noAr) && noAr !== versaoInicial
+  } catch {
+    return false
+  }
+}
+
 export function observarNovaVersao() {
-  const versaoInicial = scriptAtual()
+  versaoInicial = scriptAtual()
   if (!versaoInicial) return () => {} // dev local: sem build, não tem o que comparar
 
   async function conferir() {
-    try {
-      const noAr = await versaoNoAr()
-      if (noAr && noAr !== versaoInicial) {
-        window.location.reload()
-      }
-    } catch {
-      // sem internet agora — tenta de novo na próxima
+    if (segurando > 0) return
+    if ((await existeVersaoNova()) && segurando === 0) {
+      window.location.reload()
     }
   }
 

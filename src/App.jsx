@@ -6,6 +6,7 @@ import TelaNovaSenha from './components/TelaNovaSenha'
 import TelaSemAcesso from './components/TelaSemAcesso'
 import PainelLider from './components/PainelLider'
 import ConviteParaInstalar from './components/ConviteParaInstalar'
+import PuxarParaAtualizar from './components/PuxarParaAtualizar'
 import { useSessao } from './hooks/useSessao'
 import { useDadosRifa } from './hooks/useDadosRifa'
 
@@ -70,8 +71,10 @@ export default function App() {
       )
     }
 
-    if (eLider) return <PainelLider />
-    if (eVendedor) return <TelaVendedor />
+    // arrastar de cima pra baixo busca tudo de novo (vendas, apadrinhamentos...)
+    const puxar = <PuxarParaAtualizar aoAtualizar={() => recarregar({ silencioso: true })} />
+    if (eLider) return <>{puxar}<PainelLider /></>
+    if (eVendedor) return <>{puxar}<TelaVendedor /></>
   }
 
   if (papelDesejado === 'lider') return <TelaLider aoVoltar={() => escolherPorta(null)} />

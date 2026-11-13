@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import EstadoVazio from '../EstadoVazio'
 import FormularioApadrinhar from './FormularioApadrinhar'
 import { listarParaApadrinhar } from '../../lib/db/apadrinhamento'
 import { bateBusca } from '../../utils/busca'
 import { formatarMoeda } from '../../utils/formato'
 import { infoDoGrupo } from '../../utils/grupos'
+import { apagarRascunho, lerRascunho } from '../../utils/rascunhoApadrinhamento'
 import estilos from './TelaApadrinhar.module.css'
 
 /**
@@ -44,6 +45,18 @@ export default function TelaApadrinhar() {
         .filter((v) => v.disponivel > 0),
     [lista]
   )
+
+  // voltou do app do banco e a página recarregou? reabre quem estava sendo
+  // apadrinhado, com o que já tinha sido digitado (ver rascunhoApadrinhamento)
+  const jaRetomou = useRef(false)
+  useEffect(() => {
+    if (jaRetomou.current || carregando || erro) return
+    jaRetomou.current = true
+    const rascunho = lerRascunho()
+    const retomado = rascunho && comConta.find((v) => v.vendedorId === rascunho.vendedorId)
+    if (retomado) setEscolhido(retomado)
+    else if (rascunho) apagarRascunho() // a pessoa já saiu da lista (bateu a meta)
+  }, [carregando, erro, comConta])
 
   const filtrada = useMemo(() => {
     const termo = busca.trim()

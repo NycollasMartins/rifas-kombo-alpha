@@ -30,12 +30,21 @@ function extensaoDe(arquivo) {
   return partes.pop().toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
 }
 
-async function enviar(bucket, caminho, arquivo) {
+/**
+ * `substituir` liga o "upsert" do Storage — só serve pra quem está logado:
+ * sobrescrever exige permissão de LER e ALTERAR o arquivo, além de criar, e
+ * quem apadrinha (sem login) só tem a de criar. Com upsert ligado o envio
+ * dele era recusado com "row-level security", mesmo com nome de arquivo novo.
+ */
+async function enviar(bucket, caminho, arquivo, { substituir = true } = {}) {
   // fotos tiradas direto da câmera às vezes chegam sem "type" — sem um
   // Content-Type válido, o Storage recusa o envio com "No content provided"
   const { error } = await supabase.storage
     .from(bucket)
-    .upload(caminho, arquivo, { upsert: true, contentType: arquivo.type || 'application/octet-stream' })
+    .upload(caminho, arquivo, {
+      upsert: substituir,
+      contentType: arquivo.type || 'application/octet-stream',
+    })
 
   if (error) {
     if (String(error.message).toLowerCase().includes('bucket not found')) {
@@ -89,12 +98,12 @@ export function novoLoteId() {
   return 'lote-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10)
 }
 
-export async function enviarComprovante(grupo, loteId, arquivo) {
+export async function enviarComprovante(grupo, loteId, arquivo, opcoes) {
   const problema = validarArquivo(arquivo)
   if (problema) throw new Error(problema)
 
   const caminho = `${grupo}/${loteId}.${extensaoDe(arquivo)}`
-  return enviar('comprovantes', caminho, arquivo)
+  return enviar('comprovantes', caminho, arquivo, opcoes)
 }
 
 export const gerarLinkDoComprovante = (caminho) => gerarLink('comprovantes', caminho)

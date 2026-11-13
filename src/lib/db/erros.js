@@ -2,11 +2,15 @@
  * Traduz os erros técnicos do Supabase para frases que uma pessoa entende.
  */
 
+// Neutra de propósito: quem esbarra nisso pode ser vendedor ou alguém sem
+// login (apadrinhamento) — "faça login como líder" só confundia.
+const SEM_PERMISSAO = 'Você não tem permissão para fazer isso. Se acha que é um engano, fale com a liderança.'
+
 const MENSAGENS = {
   '23505': 'Esse registro já existe. Se for o e-mail, ele já está em outro vendedor.',
   '23503': 'Não dá para excluir: existem vendas ligadas a este vendedor.',
   '23514': 'Algum campo foi preenchido de um jeito que o sistema não aceita.',
-  '42501': 'Você não tem permissão para isso. Faça login como líder.',
+  '42501': SEM_PERMISSAO,
   PGRST301: 'Sua sessão expirou. Entre novamente.',
 }
 
@@ -35,7 +39,7 @@ export function traduzirErro(erro, padrao = 'Não foi possível concluir. Tente 
     return MENSAGENS[erro.code]
   }
   if (typeof erro.message === 'string' && erro.message.includes('row-level security')) {
-    return 'Você não tem permissão para isso. Faça login como líder.'
+    return SEM_PERMISSAO
   }
 
   return erro.message || padrao

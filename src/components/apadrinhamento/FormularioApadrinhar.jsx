@@ -7,20 +7,43 @@ import { buscarPixParaApadrinhar } from '../../lib/db/chavePix'
 import { montarPixCopiaECola, PIX_CIDADE } from '../../utils/pix'
 import { formatarMoeda, formatarNumeroRifa } from '../../utils/formato'
 import { traduzirErro } from '../../lib/db/erros'
+import { segurarAtualizacao } from '../../utils/atualizacoes'
+import { apagarRascunho, lerRascunho, salvarRascunho } from '../../utils/rascunhoApadrinhamento'
 import estilos from './TelaApadrinhar.module.css'
 
 /** Passo 2: quantidade, dados do comprador, Pix e comprovante opcional. */
 export default function FormularioApadrinhar({ item, aoVoltar }) {
   const maximo = Math.max(1, Math.min(50, Math.ceil(item.disponivel / item.preco)))
 
-  const [quantidade, setQuantidade] = useState(1)
-  const [comprador, setComprador] = useState('')
-  const [telefone, setTelefone] = useState('')
+  // se a página recarregou no meio (voltou do app do banco), retoma de onde parou
+  const [rascunho] = useState(() => {
+    const salvo = lerRascunho()
+    return salvo?.vendedorId === item.vendedorId ? salvo : null
+  })
+  const [quantidade, setQuantidade] = useState(() =>
+    Math.max(1, Math.min(maximo, Number(rascunho?.quantidade) || 1))
+  )
+  const [comprador, setComprador] = useState(rascunho?.comprador || '')
+  const [telefone, setTelefone] = useState(rascunho?.telefone || '')
   const [arquivo, setArquivo] = useState(null)
   const [copiado, setCopiado] = useState(false)
   const [erro, setErro] = useState('')
+  const [aviso, setAviso] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [resultado, setResultado] = useState(null)
+
+  // enquanto o formulário está na tela, a atualização automática não recarrega
+  useEffect(() => segurarAtualizacao(), [])
+
+  useEffect(() => {
+    if (resultado) return
+    salvarRascunho({ vendedorId: item.vendedorId, quantidade, comprador, telefone })
+  }, [item.vendedorId, quantidade, comprador, telefone, resultado])
+
+  function voltar() {
+    apagarRascunho()
+    aoVoltar()
+  }
 
   const inputArquivo = useRef(null)
   const canvasRef = useRef(null)
@@ -87,12 +110,24 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
     if (!recebedor) return setErro(erroRecebedor || 'Espere o Pix carregar antes de concluir.')
     if (!comprador.trim()) return setErro('Digite o seu nome.')
     setErro('')
+    setAviso('')
     setEnviando(true)
     try {
+      // O comprovante é opcional: se o envio dele falhar, o apadrinhamento
+      // é registrado do mesmo jeito — perder o registro de quem já pagou o
+      // Pix é muito pior do que ficar sem a foto.
       let comprovantePath = ''
       if (arquivo) {
-        const loteId = novoLoteId()
-        comprovantePath = await enviarComprovante(item.grupo, loteId, arquivo)
+        try {
+          // sem login não dá pra sobrescrever arquivo — e o nome é sempre novo
+          comprovantePath = await enviarComprovante(item.grupo, novoLoteId(), arquivo, {
+            substituir: false,
+          })
+        } catch {
+          setAviso(
+            `Não conseguimos anexar a foto do comprovante, mas o apadrinhamento foi registrado. Se puder, mande o comprovante para ${item.nome} ou para a liderança.`
+          )
+        }
       }
       const criadas = await registrarApadrinhamento({
         vendedorId: item.vendedorId,
@@ -101,7 +136,8 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
         telefone: telefone.trim(),
         comprovantePath,
       })
-      setResultado(criadas)
+      apagarRascunho()
+      setResultado({ criadas, comComprovante: Boolean(comprovantePath) })
     } catch (e) {
       setErro(traduzirErro(e, e.message))
     } finally {
@@ -119,7 +155,7 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
             Muito obrigado por ajudar <strong>{item.nome}</strong> a chegar ao acampamento.
           </p>
           <div className={estilos.numeros}>
-            {resultado
+            {resultado.criadas
               .slice()
               .sort((a, b) => a.numero - b.numero)
               .map((v) => (
@@ -128,16 +164,23 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
                 </span>
               ))}
           </div>
-          {arquivo ? (
+          {aviso && <p className="error-text">{aviso}</p>}
+          {resultado.comComprovante ? (
             <p className="texto-ajuda">
               Recebemos o seu comprovante — assim que a liderança conferir, isso já conta pra meta
               dele(a).
             </p>
           ) : (
-            <p className="texto-ajuda">
-              Se ainda não fez o Pix, é só escanear o QR Code que apareceu antes. Se puder, mande o
-              comprovante depois pra liderança confirmar mais rápido.
-            </p>
+            <>
+              <p className="texto-ajuda">
+                Se ainda não fez o Pix de {formatarMoeda(total)}, copie o código abaixo e cole no
+                app do seu banco ("Pix Copia e Cola"). Se puder, mande o comprovante depois pra
+                liderança confirmar mais rápido.
+              </p>
+              <button type="button" className="btn btn-block" onClick={copiarPix} style={{ marginBottom: 10 }}>
+                {copiado ? 'Copiado!' : 'Copiar código Pix de novo'}
+              </button>
+            </>
           )}
           <button className="btn btn-primary btn-block" onClick={() => window.location.reload()}>
             Apadrinhar outra pessoa
@@ -149,7 +192,7 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
 
   return (
     <div className={estilos.pagina}>
-      <BotaoVoltar aoClicar={aoVoltar} />
+      <BotaoVoltar aoClicar={voltar} />
 
       <div className="card">
         <h2>Apadrinhando {item.nome}</h2>

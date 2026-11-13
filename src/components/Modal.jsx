@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { segurarAtualizacao } from '../utils/atualizacoes'
 import estilos from './Modal.module.css'
 
 /**
@@ -19,6 +20,11 @@ export default function Modal({ titulo, aoFechar, children, rodape, soFechaNoX }
   // trava isso fechava o modal sozinho antes da pessoa salvar.
   const comecouNoFundo = useRef(false)
 
+  // modal aberto quase sempre é formulário: não deixa a atualização
+  // automática (utils/atualizacoes.js) recarregar a página e perder o que
+  // foi digitado
+  useEffect(() => segurarAtualizacao(), [])
+
   useEffect(() => {
     if (soFechaNoX) return undefined
 
@@ -32,6 +38,7 @@ export default function Modal({ titulo, aoFechar, children, rodape, soFechaNoX }
   return (
     <div
       className={estilos.fundo}
+      data-modal-aberto=""
       onPointerDown={(e) => {
         comecouNoFundo.current = e.target === e.currentTarget
       }}
