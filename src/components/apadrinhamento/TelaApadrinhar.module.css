@@ -175,3 +175,42 @@
   word-break: break-all;
   resize: none;
 }
+
+.arquivoEscolhido {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  min-width: 0;
+}
+
+.arquivoEscolhido .nomeArquivo {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.previa {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.iconeArquivo {
+  font-size: 32px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.anexarDepois {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 16px;
+  text-align: left;
+}

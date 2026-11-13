@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
+import BotaoArquivo from './BotaoArquivo'
 import BotoesDoWhatsapp from './BotoesDoWhatsapp'
 import { useDadosRifa } from '../hooks/useDadosRifa'
 import { enviarTermo, gerarLinkDoTermo, removerTermo } from '../lib/db/arquivos'
@@ -18,14 +19,10 @@ export default function PainelTermo({ vendedor }) {
   const { config, buscarDadosPrivados, salvarPrivadoDoVendedor } = useDadosRifa()
   const privado = buscarDadosPrivados(vendedor.id)
 
-  const inputArquivo = useRef(null)
   const [ocupado, setOcupado] = useState('')
   const [erro, setErro] = useState('')
 
-  async function aoEscolherArquivo(evento) {
-    const arquivo = evento.target.files?.[0]
-    evento.target.value = ''
-    if (!arquivo) return
+  async function aoEscolherArquivo(arquivo) {
 
     setErro('')
     setOcupado('Enviando…')
@@ -123,14 +120,9 @@ export default function PainelTermo({ vendedor }) {
             Abrir
           </button>
         )}
-        <button
-          type="button"
-          className="btn btn-sm"
-          onClick={() => inputArquivo.current?.click()}
-          disabled={Boolean(ocupado)}
-        >
+        <BotaoArquivo aoEscolher={aoEscolherArquivo} desabilitado={Boolean(ocupado)}>
           {ocupado || (privado.termoPath ? 'Trocar arquivo' : 'Anexar arquivo')}
-        </button>
+        </BotaoArquivo>
         {privado.termoPath && (
           <button
             type="button"
@@ -143,13 +135,6 @@ export default function PainelTermo({ vendedor }) {
         )}
       </div>
 
-      <input
-        ref={inputArquivo}
-        type="file"
-        accept="application/pdf,image/*"
-        onChange={aoEscolherArquivo}
-        hidden
-      />
     </div>
   )
 }

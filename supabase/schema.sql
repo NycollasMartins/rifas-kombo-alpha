@@ -1102,6 +1102,51 @@ end;
 $$;
 
 /**
+ * Quem apadrinhou e não conseguiu anexar o comprovante na hora pode anexar
+ * logo depois, na própria tela de "Apadrinhamento registrado!". Só vale
+ * pro lote que a pessoa acabou de criar (o código do lote só ela recebeu),
+ * só se ainda estiver sem comprovante e pendente, e só nas primeiras 48h.
+ */
+create or replace function public.anexar_comprovante_apadrinhamento(
+  p_lote_id          uuid,
+  p_comprovante_path text
+)
+returns integer
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  v_grupo text;
+  v_qtd   integer;
+begin
+  select grupo into v_grupo
+    from public.vendas
+   where lote_id = p_lote_id and origem = 'apadrinhamento'
+   limit 1;
+  if v_grupo is null then
+    raise exception 'Apadrinhamento não encontrado.';
+  end if;
+  if coalesce(p_comprovante_path, '') not like v_grupo || '/%' then
+    raise exception 'Comprovante inválido.';
+  end if;
+
+  update public.vendas
+     set comprovante_path = p_comprovante_path
+   where lote_id = p_lote_id
+     and origem = 'apadrinhamento'
+     and status = 'pendente'
+     and coalesce(comprovante_path, '') = ''
+     and data > now() - interval '48 hours';
+  get diagnostics v_qtd = row_count;
+
+  if v_qtd = 0 then
+    raise exception 'Esse apadrinhamento já tem comprovante ou já foi conferido pela liderança.';
+  end if;
+  return v_qtd;
+end;
+$$;
+
+/**
  * Assinatura digital do termo: o vendedor lê o texto (já com os dados dele)
  * dentro do app e digita o próprio nome. Grava o nome, o texto exato lido e
  * a data em vendedores_privado — mas o vendedor nunca ganha permissão de
@@ -1795,11 +1840,12 @@ grant execute on function public.meu_papel(text, text), public.meu_grupo(text, t
                           public.pode_corrigir_venda(text, text)
   to anon, authenticated;
 
--- o formulário de apadrinhar é público de propósito — essas três são as
+-- o formulário de apadrinhar é público de propósito — essas quatro são as
 -- únicas funções liberadas pra quem não fez login nenhum
 grant execute on function public.listar_para_apadrinhar()                                          to anon, authenticated;
 grant execute on function public.pix_para_apadrinhar(uuid)                                         to anon, authenticated;
 grant execute on function public.registrar_apadrinhamento(uuid, integer, text, text, text)          to anon, authenticated;
+grant execute on function public.anexar_comprovante_apadrinhamento(uuid, text)                     to anon, authenticated;
 
 -- ============================================================================
 --  10. ARQUIVOS (buckets privados)

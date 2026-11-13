@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
+import BotaoArquivo from './BotaoArquivo'
 import Modal from './Modal'
 import { useDadosRifa } from '../hooks/useDadosRifa'
 import { enviarComprovante, validarArquivo } from '../lib/db/arquivos'
@@ -19,17 +20,13 @@ export default function ModalCompletarVenda({ lote, precoRifa, grupo, aoFechar }
   const { completarCompra } = useDadosRifa()
   const v = lote.primeira
   const valor = lote.rifas.length * precoRifa
-  const inputArquivo = useRef(null)
 
   const [status, setStatus] = useState(v.status)
   const [arquivo, setArquivo] = useState(null)
   const [erro, setErro] = useState('')
   const [etapa, setEtapa] = useState('')
 
-  function escolherArquivo(evento) {
-    const escolhido = evento.target.files?.[0]
-    evento.target.value = ''
-    if (!escolhido) return
+  function escolherArquivo(escolhido) {
     const problema = validarArquivo(escolhido)
     if (problema) return setErro(problema)
     setErro('')
@@ -106,18 +103,11 @@ export default function ModalCompletarVenda({ lote, precoRifa, grupo, aoFechar }
           )}
 
           <div className={estilos.acoesComprovante}>
-            <button type="button" className="btn btn-sm" onClick={() => inputArquivo.current?.click()}>
-              {v.comprovantePath || arquivo ? 'Trocar foto' : 'Anexar foto'}
-            </button>
+            <BotaoArquivo aoEscolher={escolherArquivo}>
+              {v.comprovantePath || arquivo ? 'Trocar arquivo' : 'Anexar foto ou PDF'}
+            </BotaoArquivo>
           </div>
 
-          <input
-            ref={inputArquivo}
-            type="file"
-            accept="image/*,application/pdf"
-            onChange={escolherArquivo}
-            hidden
-          />
         </div>
       )}
 

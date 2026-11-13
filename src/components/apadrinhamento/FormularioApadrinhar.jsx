@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import QRCode from 'qrcode'
 import BotaoVoltar from '../BotaoVoltar'
-import { registrarApadrinhamento } from '../../lib/db/apadrinhamento'
+import BotaoArquivo from '../BotaoArquivo'
+import {
+  anexarComprovanteDoApadrinhamento,
+  registrarApadrinhamento,
+} from '../../lib/db/apadrinhamento'
 import { enviarComprovante, novoLoteId, validarArquivo } from '../../lib/db/arquivos'
 import { buscarPixParaApadrinhar } from '../../lib/db/chavePix'
 import { montarPixCopiaECola, PIX_CIDADE } from '../../utils/pix'
@@ -33,6 +37,19 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
   const [mostrarCodigo, setMostrarCodigo] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [resultado, setResultado] = useState(null)
+  const [anexandoDepois, setAnexandoDepois] = useState(false)
+  const [erroDepois, setErroDepois] = useState('')
+
+  // miniatura da foto escolhida, pra pessoa ter certeza de que anexou a certa
+  const previa = useMemo(() => {
+    if (!arquivo || !String(arquivo.type).startsWith('image/')) return ''
+    try {
+      return URL.createObjectURL(arquivo)
+    } catch {
+      return ''
+    }
+  }, [arquivo])
+  useEffect(() => () => previa && URL.revokeObjectURL(previa), [previa])
 
   // enquanto o formulário está na tela, a atualização automática não recarrega
   useEffect(() => segurarAtualizacao(), [])
@@ -47,7 +64,6 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
     aoVoltar()
   }
 
-  const inputArquivo = useRef(null)
   const canvasRef = useRef(null)
   const codigoRef = useRef(null)
   // trava contra toque duplo no "Concluir": dois toques rápidos chegavam a
@@ -92,10 +108,7 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
     setQuantidade((q) => Math.max(1, Math.min(maximo, q + delta)))
   }
 
-  function escolherArquivo(evento) {
-    const escolhido = evento.target.files?.[0]
-    evento.target.value = ''
-    if (!escolhido) return
+  function escolherArquivo(escolhido) {
     const problema = validarArquivo(escolhido)
     if (problema) {
       setArquivo(null)
@@ -129,6 +142,26 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
     }, 50)
   }
 
+  async function anexarDepois(escolhido) {
+    if (anexandoDepois) return
+    const problema = validarArquivo(escolhido)
+    if (problema) return setErroDepois(problema)
+    setErroDepois('')
+    setAnexandoDepois(true)
+    try {
+      const caminho = await enviarComprovante(item.grupo, novoLoteId(), escolhido, {
+        substituir: false,
+      })
+      await anexarComprovanteDoApadrinhamento(resultado.loteId, caminho)
+      setAviso('')
+      setResultado((r) => ({ ...r, comComprovante: true }))
+    } catch (e) {
+      setErroDepois(e.message || 'Não foi possível enviar. Tente de novo.')
+    } finally {
+      setAnexandoDepois(false)
+    }
+  }
+
   async function concluir() {
     if (enviandoRef.current) return
     if (!recebedor) return setErro(erroRecebedor || 'Espere o Pix carregar antes de concluir.')
@@ -150,7 +183,7 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
           })
         } catch {
           setAviso(
-            `Não conseguimos anexar a foto do comprovante, mas o apadrinhamento foi registrado. Se puder, mande o comprovante para ${item.nome} ou para a liderança.`
+            'Não conseguimos enviar o comprovante (a internet oscilou), mas o apadrinhamento foi registrado. Tente anexar de novo aqui embaixo.'
           )
         }
       }
@@ -162,7 +195,11 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
         comprovantePath,
       })
       apagarRascunho()
-      setResultado({ criadas, comComprovante: Boolean(comprovantePath) })
+      setResultado({
+        criadas,
+        loteId: criadas[0]?.loteId,
+        comComprovante: Boolean(comprovantePath),
+      })
     } catch (e) {
       setErro(traduzirErro(e, e.message))
     } finally {
@@ -198,6 +235,22 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
             </p>
           ) : (
             <>
+              {resultado.loteId && (
+                <div className={estilos.anexarDepois}>
+                  <p className="texto-ajuda">
+                    Já pagou? Anexe o comprovante (foto, print ou PDF) pra liderança confirmar
+                    mais rápido:
+                  </p>
+                  <BotaoArquivo
+                    className="btn btn-primary btn-block"
+                    aoEscolher={anexarDepois}
+                    desabilitado={anexandoDepois}
+                  >
+                    {anexandoDepois ? 'Enviando comprovante…' : '📎 Anexar comprovante'}
+                  </BotaoArquivo>
+                  {erroDepois && <p className="error-text">{erroDepois}</p>}
+                </div>
+              )}
               <p className="texto-ajuda">
                 Se ainda não fez o Pix de {formatarMoeda(total)}, copie o código abaixo e cole no
                 app do seu banco ("Pix Copia e Cola"). Se puder, mande o comprovante depois pra
@@ -316,18 +369,28 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
 
         <div className="field">
           <label>Comprovante do Pix (opcional, mas ajuda a confirmar mais rápido)</label>
-          {arquivo && <p className={estilos.nomeArquivo}>{arquivo.name}</p>}
-          <button type="button" className="btn btn-sm" onClick={() => inputArquivo.current?.click()}>
-            {arquivo ? 'Trocar foto' : 'Anexar comprovante'}
-          </button>
+          {arquivo && (
+            <div className={estilos.arquivoEscolhido}>
+              {previa ? (
+                <img
+                  src={previa}
+                  alt=""
+                  className={estilos.previa}
+                  onError={(e) => (e.currentTarget.style.display = 'none')}
+                />
+              ) : (
+                <span className={estilos.iconeArquivo}>📄</span>
+              )}
+              <span className={estilos.nomeArquivo}>✓ {arquivo.name || 'comprovante'}</span>
+            </div>
+          )}
+          <BotaoArquivo aoEscolher={escolherArquivo}>
+            {arquivo ? 'Trocar arquivo' : '📎 Anexar comprovante'}
+          </BotaoArquivo>
+          <p className="texto-ajuda" style={{ marginTop: 6 }}>
+            Foto, print da tela ou PDF do comprovante.
+          </p>
           {erroArquivo && <p className="error-text">{erroArquivo}</p>}
-          <input
-            ref={inputArquivo}
-            type="file"
-            accept="image/*,application/pdf"
-            onChange={escolherArquivo}
-            hidden
-          />
         </div>
 
         {erro && (

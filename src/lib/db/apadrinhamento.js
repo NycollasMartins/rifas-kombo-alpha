@@ -43,3 +43,17 @@ export async function registrarApadrinhamento({
   if (error) throw new Error(traduzirErro(error, 'Não foi possível registrar o apadrinhamento.'))
   return (data || []).map(mapearVenda)
 }
+
+/** Anexa o comprovante a um apadrinhamento que acabou de ser registrado sem ele. */
+export async function anexarComprovanteDoApadrinhamento(loteId, comprovantePath) {
+  const { error } = await supabase.rpc('anexar_comprovante_apadrinhamento', {
+    p_lote_id: loteId,
+    p_comprovante_path: comprovantePath,
+  })
+  if (error) {
+    if (error.code === 'PGRST202') {
+      throw new Error('Ainda não dá pra anexar por aqui. Mande o comprovante para a liderança.')
+    }
+    throw new Error(traduzirErro(error, 'Não foi possível anexar o comprovante.'))
+  }
+}

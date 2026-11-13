@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import BotaoArquivo from './BotaoArquivo'
 import Modal from './Modal'
 import BotoesDoWhatsapp from './BotoesDoWhatsapp'
 import { useDadosRifa } from '../hooks/useDadosRifa'
@@ -21,7 +22,6 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
   const { config, registrarCompra, buscarVendedor } = useDadosRifa()
   const { grupo } = useSessao()
   const vendedor = buscarVendedor(vendedorId)
-  const inputArquivo = useRef(null)
   // dois toques rápidos em Salvar registravam a compra duas vezes (rifas em
   // dobro) antes do botão ficar desabilitado na tela
   const salvando = useRef(false)
@@ -44,10 +44,7 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
     setQuantidade((q) => Math.max(1, Math.min(50, q + delta)))
   }
 
-  function escolherArquivo(evento) {
-    const escolhido = evento.target.files?.[0]
-    evento.target.value = ''
-    if (!escolhido) return
+  function escolherArquivo(escolhido) {
     const problema = validarArquivo(escolhido)
     if (problema) return setErro(problema)
     setErro('')
@@ -254,13 +251,9 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
           )}
 
           <div className={estilos.acoesComprovante}>
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={() => inputArquivo.current?.click()}
-            >
-              {arquivo ? 'Trocar foto' : 'Anexar foto'}
-            </button>
+            <BotaoArquivo aoEscolher={escolherArquivo}>
+              {arquivo ? 'Trocar arquivo' : 'Anexar foto ou PDF'}
+            </BotaoArquivo>
             {arquivo && (
               <button
                 type="button"
@@ -283,13 +276,6 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
             </label>
           )}
 
-          <input
-            ref={inputArquivo}
-            type="file"
-            accept="image/*,application/pdf"
-            onChange={escolherArquivo}
-            hidden
-          />
         </div>
       )}
 
