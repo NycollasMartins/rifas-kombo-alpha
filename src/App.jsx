@@ -36,8 +36,16 @@ export default function App() {
   // é onde a maioria chega pela primeira vez.
   const tela = escolherTela()
 
+  // Puxar de cima pra baixo funciona em TODAS as telas. Com os dados já na
+  // tela, busca tudo de novo (vendas, apadrinhamentos...) sem piscar; nas
+  // telas de entrada/carregando/erro, recarrega a página inteira.
+  const dadosNaTela = temAcesso && !carregando && !erroCarregamento && (eLider || eVendedor)
+
   return (
     <>
+      <PuxarParaAtualizar
+        aoAtualizar={dadosNaTela ? () => recarregar({ silencioso: true }) : undefined}
+      />
       {tela}
       <ConviteParaInstalar />
     </>
@@ -71,10 +79,8 @@ export default function App() {
       )
     }
 
-    // arrastar de cima pra baixo busca tudo de novo (vendas, apadrinhamentos...)
-    const puxar = <PuxarParaAtualizar aoAtualizar={() => recarregar({ silencioso: true })} />
-    if (eLider) return <>{puxar}<PainelLider /></>
-    if (eVendedor) return <>{puxar}<TelaVendedor /></>
+    if (eLider) return <PainelLider />
+    if (eVendedor) return <TelaVendedor />
   }
 
   if (papelDesejado === 'lider') return <TelaLider aoVoltar={() => escolherPorta(null)} />

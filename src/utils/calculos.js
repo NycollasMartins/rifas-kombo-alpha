@@ -30,8 +30,25 @@ export function metaDoVendedor(vendedor, config) {
   return vendedor.meta || (ehChale(vendedor) ? config.metaChale : config.metaPadrao)
 }
 
+// Ranking, painel e lista de vendedores pedem as vendas de CADA vendedor —
+// filtrar as milhares de vendas uma vez por vendedor (150 x 4 mil) pesava no
+// celular. Separa tudo por vendedor numa passada só e guarda, enquanto for a
+// mesma lista (o app nunca altera uma lista: cria outra quando algo muda).
+const indicePorLista = new WeakMap()
+const NENHUMA = Object.freeze([])
+
 export function vendasDoVendedor(vendas, vendedorId) {
-  return vendas.filter((v) => v.vendedorId === vendedorId)
+  let indice = indicePorLista.get(vendas)
+  if (!indice) {
+    indice = new Map()
+    for (const venda of vendas) {
+      const doVendedor = indice.get(venda.vendedorId)
+      if (doVendedor) doVendedor.push(venda)
+      else indice.set(venda.vendedorId, [venda])
+    }
+    indicePorLista.set(vendas, indice)
+  }
+  return indice.get(vendedorId) || NENHUMA
 }
 
 export function totalPago(vendas, precoRifa) {

@@ -1,39 +1,66 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { existeVersaoNova } from '../utils/atualizacoes'
 import estilos from './PuxarParaAtualizar.module.css'
 
 const LIMIAR = 70 // quanto (em px, já com a resistência) precisa puxar pra valer
 const MAXIMO = 110
+const TEMPO_MAXIMO_MS = 15_000
 
 /**
  * "Puxar pra atualizar": no topo da página, arrastar o dedo pra baixo e
- * soltar busca tudo de novo no banco. Feito à mão porque o app instalado
- * (tela cheia, sem barra do navegador) não tem o gesto nativo — e no
- * navegador o gesto nativo é desligado enquanto este existe, pra não
- * disparar os dois juntos.
+ * soltar busca tudo de novo. Feito à mão porque o app instalado (tela
+ * cheia, sem barra do navegador) não tem o gesto nativo — e no navegador o
+ * gesto nativo é desligado enquanto este existe, pra não disparar os dois.
  *
- * Se já saiu uma versão nova do app, recarrega a página inteira em vez de
- * só os dados — é o "recarregar de verdade". Com algum modal aberto (um
- * formulário no meio), o gesto não faz nada.
+ * `aoAtualizar` busca os dados de novo; sem ele, recarrega a página
+ * inteira (telas de entrada, por exemplo). Se já saiu uma versão nova do
+ * app, recarrega a página de qualquer jeito. Com algum modal aberto (um
+ * formulário no meio) ou com `desligado`, o gesto não faz nada.
+ *
+ * O aviso acompanha o dedo mexendo direto no estilo do elemento, sem
+ * passar pelo React a cada movimento — é isso que deixa o arrasto e o
+ * giro lisos mesmo com a tela cheia de coisa.
  */
-export default function PuxarParaAtualizar({ aoAtualizar }) {
-  const [distancia, setDistancia] = useState(0)
-  const [atualizando, setAtualizando] = useState(false)
-  const atualizandoRef = useRef(false)
+export default function PuxarParaAtualizar({ aoAtualizar, desligado = false }) {
+  const indicadorRef = useRef(null)
+  const textoRef = useRef(null)
   const aoAtualizarRef = useRef(aoAtualizar)
   aoAtualizarRef.current = aoAtualizar
+  const desligadoRef = useRef(desligado)
+  desligadoRef.current = desligado
 
   useEffect(() => {
     const raiz = document.documentElement
     const anterior = raiz.style.overscrollBehaviorY
     raiz.style.overscrollBehaviorY = 'contain'
 
+    const indicador = indicadorRef.current
+    const texto = textoRef.current
     let inicioY = null
     let atual = 0
+    let atualizando = false
+    let quadro = 0
+
+    function desenhar(distancia, estado) {
+      cancelAnimationFrame(quadro)
+      quadro = requestAnimationFrame(() => {
+        indicador.style.transform = `translate3d(-50%, ${distancia}px, 0)`
+        indicador.style.opacity = distancia > 0 || estado === 'atualizando' ? '1' : '0'
+        indicador.style.setProperty('--giro', `${distancia * 4}deg`)
+        indicador.dataset.estado = estado
+        texto.textContent =
+          estado === 'atualizando'
+            ? 'Atualizando…'
+            : estado === 'pronto'
+              ? 'Solte para atualizar'
+              : 'Puxe para atualizar'
+      })
+    }
 
     function aoTocar(e) {
       const podeComecar =
-        !atualizandoRef.current &&
+        !atualizando &&
+        !desligadoRef.current &&
         e.touches.length === 1 &&
         window.scrollY <= 0 &&
         !document.querySelector('[data-modal-aberto]')
@@ -45,12 +72,12 @@ export default function PuxarParaAtualizar({ aoAtualizar }) {
       if (inicioY === null) return
       const puxado = e.touches[0].clientY - inicioY
       if (puxado <= 0 || window.scrollY > 0) {
+        if (atual !== 0) desenhar(0, 'puxando')
         atual = 0
-        setDistancia(0)
         return
       }
       atual = Math.min(puxado * 0.5, MAXIMO)
-      setDistancia(atual)
+      desenhar(atual, atual >= LIMIAR ? 'pronto' : 'puxando')
     }
 
     async function aoSoltar() {
@@ -58,23 +85,30 @@ export default function PuxarParaAtualizar({ aoAtualizar }) {
       inicioY = null
       if (atual < LIMIAR) {
         atual = 0
-        setDistancia(0)
+        desenhar(0, 'puxando')
         return
       }
       atual = 0
-      atualizandoRef.current = true
-      setAtualizando(true)
-      setDistancia(LIMIAR)
+      atualizando = true
+      desenhar(LIMIAR, 'atualizando')
       try {
-        if (await existeVersaoNova()) {
+        // a conferência de versão nova e a busca dos dados vão juntas; e se
+        // a internet travar no meio, o aviso some do mesmo jeito depois de
+        // um tempo, em vez de ficar preso na tela
+        const buscar = aoAtualizarRef.current
+        const [versaoNova] = await Promise.race([
+          Promise.all([existeVersaoNova(), buscar ? buscar() : null]),
+          new Promise((resolver) => setTimeout(() => resolver([false]), TEMPO_MAXIMO_MS)),
+        ])
+        if (versaoNova || !buscar) {
           window.location.reload()
           return
         }
-        await aoAtualizarRef.current()
+      } catch {
+        // erro de rede: os dados antigos continuam na tela
       } finally {
-        atualizandoRef.current = false
-        setAtualizando(false)
-        setDistancia(0)
+        atualizando = false
+        desenhar(0, 'puxando')
       }
     }
 
@@ -83,6 +117,7 @@ export default function PuxarParaAtualizar({ aoAtualizar }) {
     window.addEventListener('touchend', aoSoltar)
     window.addEventListener('touchcancel', aoSoltar)
     return () => {
+      cancelAnimationFrame(quadro)
       raiz.style.overscrollBehaviorY = anterior
       window.removeEventListener('touchstart', aoTocar)
       window.removeEventListener('touchmove', aoMover)
@@ -91,20 +126,10 @@ export default function PuxarParaAtualizar({ aoAtualizar }) {
     }
   }, [])
 
-  if (distancia === 0 && !atualizando) return null
-
-  const pronto = distancia >= LIMIAR
   return (
-    <div className={estilos.indicador} style={{ transform: `translate(-50%, ${distancia}px)` }}>
-      <span
-        className={`${estilos.icone} ${atualizando ? estilos.girando : ''}`}
-        style={atualizando ? undefined : { transform: `rotate(${pronto ? 180 : distancia * 2.5}deg)` }}
-      >
-        {atualizando ? '⟳' : '↓'}
-      </span>
-      <span className={estilos.texto}>
-        {atualizando ? 'Atualizando…' : pronto ? 'Solte para atualizar' : 'Puxe para atualizar'}
-      </span>
+    <div ref={indicadorRef} className={estilos.indicador} data-estado="puxando" aria-live="polite">
+      <span className={estilos.circulo} />
+      <span ref={textoRef} className={estilos.texto} />
     </div>
   )
 }

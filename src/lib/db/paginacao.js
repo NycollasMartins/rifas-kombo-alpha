@@ -6,22 +6,38 @@ import { verificar } from './erros'
  * tabelas que passam disso (ex: vendas, com uma linha por rifa), isso faz
  * sumir dado antigo da tela sem a venda nunca ter saído do banco.
  *
+ * Para não esperar uma página terminar antes de pedir a próxima (com ~4 mil
+ * vendas eram 9 idas e voltas em fila, e no 4G isso passava de vários
+ * segundos), pede várias páginas AO MESMO TEMPO, em rodadas. Para assim que
+ * uma página vier incompleta — é a última.
+ *
  * `montarConsulta` tem que devolver uma consulta NOVA a cada chamada (sem
  * `.range()` aplicado) — o construtor do Supabase não é reutilizável depois
- * de ser aguardado.
+ * de ser aguardado. A consulta precisa de uma ordem estável (sem empates),
+ * senão linhas podem pular de uma página pra outra.
  */
-export async function buscarTudoPaginado(montarConsulta, mensagemErro, tamanhoPagina = 500) {
+export async function buscarTudoPaginado(
+  montarConsulta,
+  mensagemErro,
+  tamanhoPagina = 500,
+  paginasPorRodada = 6
+) {
   let tudo = []
-  let pagina = 0
+  let primeira = 0
   while (true) {
-    const inicio = pagina * tamanhoPagina
-    const linhas = verificar(
-      await montarConsulta().range(inicio, inicio + tamanhoPagina - 1),
-      mensagemErro
+    const rodada = await Promise.all(
+      Array.from({ length: paginasPorRodada }, async (_, i) => {
+        const inicio = (primeira + i) * tamanhoPagina
+        return verificar(
+          await montarConsulta().range(inicio, inicio + tamanhoPagina - 1),
+          mensagemErro
+        )
+      })
     )
-    tudo = tudo.concat(linhas)
-    if (linhas.length < tamanhoPagina) break
-    pagina++
+    for (const linhas of rodada) {
+      tudo = tudo.concat(linhas)
+      if (linhas.length < tamanhoPagina) return tudo
+    }
+    primeira += paginasPorRodada
   }
-  return tudo
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import EstadoVazio from '../EstadoVazio'
 import ModalDetalheVenda from '../ModalDetalheVenda'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
@@ -8,6 +8,11 @@ import { baixarCsvDeVendas } from '../../utils/csv'
 import { precoDoVendedor } from '../../utils/calculos'
 import { traduzirErro } from '../../lib/db/erros'
 import estilos from './AbaVendas.module.css'
+
+// Com milhares de rifas, desenhar todas de uma vez (cada uma com dois
+// seletores) travava o celular a cada letra digitada na busca e a cada
+// atualização. Mostra um pedaço e vai abrindo mais conforme pedem.
+const POR_VEZ = 50
 
 /** Todas as rifas do grupo, com filtros, status, repasse e comprovante. */
 export default function AbaVendas() {
@@ -27,10 +32,16 @@ export default function AbaVendas() {
   const [erro, setErro] = useState('')
   const [abrindo, setAbrindo] = useState('')
   const [vendoDetalhe, setVendoDetalhe] = useState(null)
+  const [limite, setLimite] = useState(POR_VEZ)
+
+  // a busca filtra milhares de linhas: o campo responde na hora e a lista
+  // acompanha logo depois, sem segurar o teclado
+  const buscaAdiada = useDeferredValue(busca)
+
+  const porId = useMemo(() => new Map(vendedores.map((v) => [v.id, v])), [vendedores])
 
   const lista = useMemo(() => {
-    const porId = new Map(vendedores.map((v) => [v.id, v]))
-    const termo = busca.trim().toLowerCase()
+    const termo = buscaAdiada.trim().toLowerCase()
 
     return vendas
       .filter((venda) => {
@@ -48,7 +59,16 @@ export default function AbaVendas() {
         return true
       })
       .sort((a, b) => b.numero - a.numero)
-  }, [vendas, vendedores, filtroStatus, filtroPagamento, busca])
+  }, [vendas, porId, filtroStatus, filtroPagamento, buscaAdiada])
+
+  // mudou o filtro? volta a mostrar só o começo da lista nova
+  const chaveFiltro = `${filtroStatus}|${filtroPagamento}|${buscaAdiada}`
+  const [filtroAnterior, setFiltroAnterior] = useState(chaveFiltro)
+  if (filtroAnterior !== chaveFiltro) {
+    setFiltroAnterior(chaveFiltro)
+    setLimite(POR_VEZ)
+  }
+  const visiveis = lista.length > limite ? lista.slice(0, limite) : lista
 
   async function executar(acao) {
     setErro('')
@@ -112,8 +132,8 @@ export default function AbaVendas() {
           <p>Nenhuma rifa encontrada.</p>
         </EstadoVazio>
       ) : (
-        lista.map((venda) => {
-          const vendedor = buscarVendedor(venda.vendedorId)
+        visiveis.map((venda) => {
+          const vendedor = porId.get(venda.vendedorId)
           return (
             <div key={venda.id} className={estilos.linha}>
               <span className={estilos.numero}>{formatarNumeroRifa(venda.numero)}</span>
@@ -176,6 +196,16 @@ export default function AbaVendas() {
             </div>
           )
         })
+      )}
+
+      {lista.length > visiveis.length && (
+        <button
+          className="btn btn-block"
+          style={{ marginTop: 8 }}
+          onClick={() => setLimite((l) => l + POR_VEZ * 2)}
+        >
+          Mostrar mais ({lista.length - visiveis.length} restante(s))
+        </button>
       )}
 
       {vendoDetalhe && (

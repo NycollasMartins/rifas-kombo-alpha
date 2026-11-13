@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import EstadoVazio from '../EstadoVazio'
 import EtiquetaSituacao from '../EtiquetaSituacao'
 import ModalVendedor from '../ModalVendedor'
@@ -73,8 +73,11 @@ export default function AbaVendedores() {
     voluntario: ' (voluntários)',
   }[filtroTipo]
 
+  // o campo responde na hora; a lista acompanha logo depois, sem segurar o teclado
+  const buscaAdiada = useDeferredValue(busca)
+
   const filtrados = useMemo(() => {
-    const termo = busca.trim().toLowerCase()
+    const termo = buscaAdiada.trim().toLowerCase()
     if (!termo) return doTipo
     const soDigitos = termo.replace(/\D/g, '')
     return doTipo.filter((v) => {
@@ -83,7 +86,7 @@ export default function AbaVendedores() {
         soDigitos.length > 0 && (v.telefone || '').replace(/\D/g, '').includes(soDigitos)
       return bateuPalavra || bateuTelefone
     })
-  }, [doTipo, busca])
+  }, [doTipo, buscaAdiada])
 
   // resumoDoVendedor varre TODA a tabela de vendas pra somar o total de um
   // vendedor — com milhares de vendas, fazer isso de novo pra cada linha a

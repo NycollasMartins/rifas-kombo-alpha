@@ -14,18 +14,39 @@
   font-size: 12.5px;
   color: var(--text-muted);
   pointer-events: none;
+  opacity: 0;
+  transform: translate3d(-50%, 0, 0);
+  will-change: transform, opacity;
 }
 
-.icone {
-  display: inline-block;
-  font-size: 16px;
-  line-height: 1;
-  color: var(--accent);
-  transition: transform 0.15s ease-out;
+/* voltando pro lugar (soltou antes da hora, ou terminou de atualizar) */
+.indicador[data-estado='puxando'] {
+  transition: opacity 0.2s ease-out;
 }
 
-.girando {
-  animation: girar 0.8s linear infinite;
+/* Círculo desenhado em CSS, girando no próprio centro — um caractere de
+   texto (↓, ⟳) gira torto, porque o centro da letra não é o centro da caixa. */
+.circulo {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-right-color: var(--accent);
+  transform: rotate(var(--giro, 0deg));
+  will-change: transform;
+}
+
+.indicador[data-estado='pronto'] .circulo {
+  border-color: var(--accent);
+}
+
+.indicador[data-estado='atualizando'] .circulo {
+  border-color: var(--line);
+  border-top-color: var(--accent);
+  animation: girar 0.7s linear infinite;
 }
 
 .texto {
@@ -33,6 +54,9 @@
 }
 
 @keyframes girar {
+  from {
+    transform: rotate(0deg);
+  }
   to {
     transform: rotate(360deg);
   }

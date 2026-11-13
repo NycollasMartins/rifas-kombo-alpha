@@ -61,6 +61,7 @@ export function ProvedorDadosRifa({ children }) {
   const [erroCarregamento, setErroCarregamento] = useState('')
 
   const jaCarregou = useRef(false)
+  const buscaEmAndamento = useRef(null)
 
   // Quem trocou de identidade sem fechar o app (ex: saiu do Alpha e entrou
   // como vendedor(a) do Kombo, mesma conta) — useSessao já sabe o papel/grupo
@@ -80,29 +81,44 @@ export function ProvedorDadosRifa({ children }) {
         setCarregando(false)
         return
       }
+      // Já tem uma busca silenciosa em andamento (voltou do segundo plano e
+      // puxou pra atualizar ao mesmo tempo, por exemplo)? Aproveita ela em
+      // vez de baixar tudo de novo em dobro.
+      if (silencioso && buscaEmAndamento.current) return buscaEmAndamento.current
       if (!silencioso) setCarregando(true)
-      try {
-        const [cfgs, vds, vs, srt, priv] = await Promise.all([
-          listarConfigs(),
-          listarVendedores(),
-          listarVendas(),
-          listarSorteios(),
-          eLider ? listarDadosPrivados() : Promise.resolve({}),
-        ])
-        setConfigsPorGrupo(cfgs)
-        setTodosVendedores(vds)
-        setTodasVendas(vs)
-        setTodosSorteios(srt)
-        setDadosPrivados(priv)
-        setErroCarregamento('')
-        setIdentidadeCarregada(identidadeAtualRef.current)
-        jaCarregou.current = true
-      } catch (erro) {
-        if (!jaCarregou.current) {
-          setErroCarregamento(traduzirErro(erro, 'Não foi possível carregar os dados.'))
+
+      async function buscarTudo() {
+        try {
+          const [cfgs, vds, vs, srt, priv] = await Promise.all([
+            listarConfigs(),
+            listarVendedores(),
+            listarVendas(),
+            listarSorteios(),
+            eLider ? listarDadosPrivados() : Promise.resolve({}),
+          ])
+          setConfigsPorGrupo(cfgs)
+          setTodosVendedores(vds)
+          setTodasVendas(vs)
+          setTodosSorteios(srt)
+          setDadosPrivados(priv)
+          setErroCarregamento('')
+          setIdentidadeCarregada(identidadeAtualRef.current)
+          jaCarregou.current = true
+        } catch (erro) {
+          if (!jaCarregou.current) {
+            setErroCarregamento(traduzirErro(erro, 'Não foi possível carregar os dados.'))
+          }
+        } finally {
+          if (!silencioso) setCarregando(false)
         }
+      }
+
+      const busca = buscarTudo()
+      buscaEmAndamento.current = busca
+      try {
+        return await busca
       } finally {
-        if (!silencioso) setCarregando(false)
+        if (buscaEmAndamento.current === busca) buscaEmAndamento.current = null
       }
     },
     [temAcesso, eLider]

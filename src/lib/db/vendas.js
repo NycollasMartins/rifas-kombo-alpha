@@ -23,7 +23,11 @@ export function mapearVenda(linha) {
 
 export async function listarVendas() {
   const linhas = await buscarTudoPaginado(
-    () => supabase.from('vendas').select('*').order('numero', { ascending: false }),
+    () => supabase
+        .from('vendas')
+        .select('*')
+        .order('numero', { ascending: false })
+        .order('id', { ascending: true }), // desempate: número se repete entre grupos
     'Não foi possível carregar as vendas.'
   )
   return linhas.map(mapearVenda)

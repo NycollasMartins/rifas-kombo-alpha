@@ -522,6 +522,17 @@ returns boolean language sql stable security definer set search_path = public as
   )
 $$;
 
+/**
+ * Mesma regra da função acima, mas no formato que o banco consegue calcular
+ * UMA vez por consulta em vez de uma vez por linha. Nas políticas de SELECT
+ * ela vai dentro de `(select ...)`: com ~4 mil vendas, a versão linha a
+ * linha levava 1,2 s por página de 500 (9 páginas = ~11 s pra abrir o app).
+ */
+create or replace function public.meus_grupos()
+returns text[] language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(distinct grupo), '{}') from public.perfis where usuario_id = auth.uid()
+$$;
+
 /** É algum dos MEUS cadastros de vendedor (qualquer grupo) — mesmo motivo da função acima. */
 create or replace function public.e_meu_vendedor(p_vendedor_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
@@ -1538,7 +1549,7 @@ alter table public.integracao_webhook_log enable row level security;
 drop policy if exists "config: só o meu grupo" on public.config;
 create policy "config: só o meu grupo"
   on public.config for select to authenticated
-  using (public.tenho_perfil_no_grupo(grupo));
+  using ((select public.e_dev()) or grupo = any ((select public.meus_grupos())::text[]));
 
 drop policy if exists "config: só a liderança altera" on public.config;
 create policy "config: só a liderança altera"
@@ -1568,7 +1579,7 @@ create policy "perfis: só o dev gerencia"
 drop policy if exists "vendedores: só o meu grupo" on public.vendedores;
 create policy "vendedores: só o meu grupo"
   on public.vendedores for select to authenticated
-  using (public.tenho_perfil_no_grupo(grupo));
+  using ((select public.e_dev()) or grupo = any ((select public.meus_grupos())::text[]));
 
 drop policy if exists "vendedores: a liderança cadastra" on public.vendedores;
 create policy "vendedores: a liderança cadastra"
@@ -1592,21 +1603,23 @@ drop policy if exists "privado: só a liderança do grupo" on public.vendedores_
 create policy "privado: só a liderança do grupo"
   on public.vendedores_privado for all to authenticated
   using (
-    public.e_lider()
+    (select public.e_lider())
     and exists (select 1 from public.vendedores v
-                 where v.id = vendedor_id and public.posso_ver(v.grupo))
+                 where v.id = vendedor_id
+                   and ((select public.e_dev()) or v.grupo = (select public.meu_grupo())))
   )
   with check (
-    public.e_lider()
+    (select public.e_lider())
     and exists (select 1 from public.vendedores v
-                 where v.id = vendedor_id and public.posso_ver(v.grupo))
+                 where v.id = vendedor_id
+                   and ((select public.e_dev()) or v.grupo = (select public.meu_grupo())))
   );
 
 -- ---- vendas -----------------------------------------------------------------
 drop policy if exists "vendas: só o meu grupo" on public.vendas;
 create policy "vendas: só o meu grupo"
   on public.vendas for select to authenticated
-  using (public.tenho_perfil_no_grupo(grupo));
+  using ((select public.e_dev()) or grupo = any ((select public.meus_grupos())::text[]));
 
 -- inserir é sempre pela função registrar_venda(), nunca direto
 drop policy if exists "vendas: a liderança edita" on public.vendas;
@@ -1646,7 +1659,7 @@ create policy "push: o vendedor cuida da própria"
 drop policy if exists "sorteios: só o meu grupo" on public.sorteios;
 create policy "sorteios: só o meu grupo"
   on public.sorteios for select to authenticated
-  using (public.tenho_perfil_no_grupo(grupo));
+  using ((select public.e_dev()) or grupo = any ((select public.meus_grupos())::text[]));
 
 drop policy if exists "sorteios: a liderança sorteia" on public.sorteios;
 create policy "sorteios: a liderança sorteia"

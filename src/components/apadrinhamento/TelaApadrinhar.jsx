@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import EstadoVazio from '../EstadoVazio'
+import PuxarParaAtualizar from '../PuxarParaAtualizar'
 import FormularioApadrinhar from './FormularioApadrinhar'
 import { listarParaApadrinhar } from '../../lib/db/apadrinhamento'
 import { bateBusca } from '../../utils/busca'
@@ -30,6 +31,16 @@ export default function TelaApadrinhar() {
       ativo = false
     }
   }, [])
+
+  // puxar pra atualizar: busca a lista de novo (quem bateu a meta sai dela)
+  async function atualizarLista() {
+    try {
+      setLista(await listarParaApadrinhar())
+      setErro('')
+    } catch (e) {
+      setErro(e.message)
+    }
+  }
 
   const comConta = useMemo(
     () =>
@@ -64,12 +75,22 @@ export default function TelaApadrinhar() {
     return comConta.filter((v) => bateBusca(termo, v.nome))
   }, [comConta, busca])
 
+  // no meio do formulário o gesto fica desligado: não pode apagar o que
+  // já foi digitado
+  const puxar = <PuxarParaAtualizar aoAtualizar={atualizarLista} desligado={Boolean(escolhido)} />
+
   if (escolhido) {
-    return <FormularioApadrinhar item={escolhido} aoVoltar={() => setEscolhido(null)} />
+    return (
+      <>
+        {puxar}
+        <FormularioApadrinhar item={escolhido} aoVoltar={() => setEscolhido(null)} />
+      </>
+    )
   }
 
   return (
     <div className={estilos.pagina}>
+      {puxar}
       <div className={estilos.cabecalho}>
         <div className={estilos.chama}>🔥</div>
         <h1 className={estilos.titulo}>Apadrinhe um Adolescente</h1>
