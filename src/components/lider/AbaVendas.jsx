@@ -2,7 +2,7 @@ import { useDeferredValue, useMemo, useState } from 'react'
 import EstadoVazio from '../EstadoVazio'
 import ModalDetalheVenda from '../ModalDetalheVenda'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
-import { gerarLinkDoComprovante } from '../../lib/db/arquivos'
+import ModalComprovante from '../ModalComprovante'
 import { formatarNumeroRifa, rotuloPagamento } from '../../utils/formato'
 import { baixarCsvDeVendas } from '../../utils/csv'
 import { precoDoVendedor } from '../../utils/calculos'
@@ -30,7 +30,7 @@ export default function AbaVendas() {
   const [filtroPagamento, setFiltroPagamento] = useState('')
   const [busca, setBusca] = useState('')
   const [erro, setErro] = useState('')
-  const [abrindo, setAbrindo] = useState('')
+  const [vendoComprovante, setVendoComprovante] = useState(null)
   const [vendoDetalhe, setVendoDetalhe] = useState(null)
   const [limite, setLimite] = useState(POR_VEZ)
 
@@ -76,18 +76,6 @@ export default function AbaVendas() {
       await acao()
     } catch (e) {
       setErro(traduzirErro(e))
-    }
-  }
-
-  async function verComprovante(caminho) {
-    setErro('')
-    setAbrindo(caminho)
-    try {
-      window.open(await gerarLinkDoComprovante(caminho), '_blank', 'noopener')
-    } catch (e) {
-      setErro(e.message)
-    } finally {
-      setAbrindo('')
     }
   }
 
@@ -150,11 +138,10 @@ export default function AbaVendas() {
                 (venda.comprovantePath ? (
                   <button
                     className="btn-ghost btn-sm"
-                    onClick={() => verComprovante(venda.comprovantePath)}
-                    disabled={abrindo === venda.comprovantePath}
+                    onClick={() => setVendoComprovante(venda)}
                     title="Ver comprovante"
                   >
-                    {abrindo === venda.comprovantePath ? '…' : '📎'}
+                    📎
                   </button>
                 ) : (
                   <span className={estilos.semComprovante} title="Pix sem comprovante">
@@ -206,6 +193,14 @@ export default function AbaVendas() {
         >
           Mostrar mais ({lista.length - visiveis.length} restante(s))
         </button>
+      )}
+
+      {vendoComprovante && (
+        <ModalComprovante
+          caminho={vendoComprovante.comprovantePath}
+          detalhe={`Rifa ${formatarNumeroRifa(vendoComprovante.numero)} · ${vendoComprovante.comprador}`}
+          aoFechar={() => setVendoComprovante(null)}
+        />
       )}
 
       {vendoDetalhe && (

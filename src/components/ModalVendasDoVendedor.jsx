@@ -5,7 +5,7 @@ import EstadoVazio from './EstadoVazio'
 import BotoesDoWhatsapp from './BotoesDoWhatsapp'
 import { useDadosRifa } from '../hooks/useDadosRifa'
 import { agruparPorLote } from '../lib/db/vendas'
-import { gerarLinkDoComprovante } from '../lib/db/arquivos'
+import ModalComprovante from './ModalComprovante'
 import { montarMensagemDaCompra } from '../utils/whatsapp'
 import { formatarDataHora, formatarMoeda, formatarNumeroRifa, rotuloPagamento } from '../utils/formato'
 import { precoDoVendedor, vendasDoVendedor } from '../utils/calculos'
@@ -20,25 +20,13 @@ import estilos from './ModalVendasDoVendedor.module.css'
  */
 export default function ModalVendasDoVendedor({ vendedor, aoFechar }) {
   const { config, vendas } = useDadosRifa()
-  const [abrindo, setAbrindo] = useState('')
+  const [vendoComprovante, setVendoComprovante] = useState('')
   const [erro, setErro] = useState('')
 
   const lotes = useMemo(
     () => agruparPorLote(vendasDoVendedor(vendas, vendedor.id)),
     [vendas, vendedor.id]
   )
-
-  async function verComprovante(caminho) {
-    setErro('')
-    setAbrindo(caminho)
-    try {
-      window.open(await gerarLinkDoComprovante(caminho), '_blank', 'noopener')
-    } catch (e) {
-      setErro(e.message)
-    } finally {
-      setAbrindo('')
-    }
-  }
 
   return (
     <Modal
@@ -106,12 +94,8 @@ export default function ModalVendasDoVendedor({ vendedor, aoFechar }) {
 
               {v.pagamento === 'pix' ? (
                 v.comprovantePath ? (
-                  <button
-                    className="btn btn-sm"
-                    onClick={() => verComprovante(v.comprovantePath)}
-                    disabled={abrindo === v.comprovantePath}
-                  >
-                    {abrindo === v.comprovantePath ? 'Abrindo…' : '📎 Ver comprovante'}
+                  <button className="btn btn-sm" onClick={() => setVendoComprovante(v.comprovantePath)}>
+                    📎 Ver comprovante
                   </button>
                 ) : (
                   <span className={estilos.semComprovante}>Pix sem comprovante anexado</span>
@@ -124,6 +108,10 @@ export default function ModalVendasDoVendedor({ vendedor, aoFechar }) {
             </div>
           )
         })
+      )}
+
+      {vendoComprovante && (
+        <ModalComprovante caminho={vendoComprovante} aoFechar={() => setVendoComprovante('')} />
       )}
     </Modal>
   )

@@ -3,7 +3,7 @@ import EstadoVazio from '../EstadoVazio'
 import EtiquetaStatus from '../EtiquetaStatus'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
 import { agruparPorLote } from '../../lib/db/vendas'
-import { gerarLinkDoComprovante } from '../../lib/db/arquivos'
+import ModalComprovante from '../ModalComprovante'
 import { precoDoVendedor } from '../../utils/calculos'
 import { formatarDataHora, formatarMoeda, formatarNumeroRifa } from '../../utils/formato'
 import { traduzirErro } from '../../lib/db/erros'
@@ -19,7 +19,7 @@ import estilos from './AbaApadrinhamento.module.css'
  */
 export default function AbaApadrinhamento() {
   const { config, vendas, buscarVendedor, mudarStatusVenda } = useDadosRifa()
-  const [abrindo, setAbrindo] = useState('')
+  const [vendoLote, setVendoLote] = useState(null)
   const [confirmando, setConfirmando] = useState('')
   const [erro, setErro] = useState('')
 
@@ -37,18 +37,6 @@ export default function AbaApadrinhamento() {
       }, 0),
     [lotes, buscarVendedor, config]
   )
-
-  async function verComprovante(caminho) {
-    setErro('')
-    setAbrindo(caminho)
-    try {
-      window.open(await gerarLinkDoComprovante(caminho), '_blank', 'noopener')
-    } catch (e) {
-      setErro(traduzirErro(e, 'Não foi possível abrir o comprovante.'))
-    } finally {
-      setAbrindo('')
-    }
-  }
 
   async function confirmarPagamento(lote) {
     setErro('')
@@ -120,12 +108,8 @@ export default function AbaApadrinhamento() {
                 <div className={estilos.acoes}>
                   <EtiquetaStatus status={v.status} />
                   {v.comprovantePath ? (
-                    <button
-                      className="btn btn-sm"
-                      onClick={() => verComprovante(v.comprovantePath)}
-                      disabled={abrindo === v.comprovantePath}
-                    >
-                      {abrindo === v.comprovantePath ? 'Abrindo…' : '📎 Ver comprovante'}
+                    <button className="btn btn-sm" onClick={() => setVendoLote(lote)}>
+                      📎 Ver comprovante
                     </button>
                   ) : (
                     <span className={estilos.semComprovante}>Sem comprovante anexado</span>
@@ -145,6 +129,50 @@ export default function AbaApadrinhamento() {
           })}
         </div>
       )}
+
+      {vendoLote && (
+        <ComprovanteDoLote
+          lote={vendas.length ? lotes.find((l) => l.loteId === vendoLote.loteId) || vendoLote : vendoLote}
+          vendedor={buscarVendedor(vendoLote.primeira.vendedorId)}
+          confirmando={confirmando === vendoLote.loteId}
+          aoConfirmar={confirmarPagamento}
+          aoFechar={() => setVendoLote(null)}
+        />
+      )}
     </>
+  )
+}
+
+/** O comprovante de um apadrinhamento, já com o botão de confirmar ali mesmo. */
+function ComprovanteDoLote({ lote, vendedor, confirmando, aoConfirmar, aoFechar }) {
+  const v = lote.primeira
+  const pendente = lote.rifas.some((r) => r.status === 'pendente')
+  return (
+    <ModalComprovante
+      caminho={v.comprovantePath}
+      detalhe={
+        <>
+          <strong>{v.comprador}</strong> apadrinhou{' '}
+          <strong>{vendedor ? vendedor.nome : '(vendedor removido)'}</strong> ·{' '}
+          {lote.rifas.length} rifa{lote.rifas.length > 1 ? 's' : ''}
+        </>
+      }
+      acoes={
+        pendente ? (
+          <button
+            className="btn btn-primary btn-block"
+            onClick={() => aoConfirmar(lote)}
+            disabled={confirmando}
+          >
+            {confirmando ? 'Confirmando…' : 'Confirmar pagamento'}
+          </button>
+        ) : (
+          <span className="tag tag-good" style={{ alignSelf: 'center' }}>
+            Pago ✓
+          </span>
+        )
+      }
+      aoFechar={aoFechar}
+    />
   )
 }
