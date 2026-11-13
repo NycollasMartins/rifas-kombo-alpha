@@ -882,6 +882,16 @@ create trigger vendas_proteger_colunas
 --  6. REGISTRAR VENDA (várias rifas de uma vez)
 -- ============================================================================
 
+-- "p_lote_id" entrou depois: a versão sem ele ficaria como uma segunda
+-- função com o mesmo nome, e o banco não saberia qual chamar
+drop function if exists public.registrar_venda(integer, text, text, text, text, text, uuid);
+
+/**
+ * "p_lote_id" é o código da compra, gerado pelo app ANTES de enviar. Se a
+ * internet cair depois de o banco gravar mas antes da resposta chegar, o
+ * vendedor toca em Salvar de novo com o MESMO código, e aqui o banco devolve
+ * a compra que já existe em vez de registrar as rifas em dobro.
+ */
 create or replace function public.registrar_venda(
   p_quantidade       integer,
   p_comprador        text,
@@ -889,7 +899,8 @@ create or replace function public.registrar_venda(
   p_pagamento        text default 'dinheiro',
   p_status           text default 'pago',
   p_comprovante_path text default null,
-  p_vendedor_id      uuid default null
+  p_vendedor_id      uuid default null,
+  p_lote_id          uuid default null
 )
 returns setof public.vendas
 language plpgsql security definer
@@ -898,7 +909,9 @@ as $$
 declare
   v_vendedor_id uuid;
   v_vendedor    public.vendedores%rowtype;
-  v_lote        uuid := gen_random_uuid();
+  v_lote        uuid := coalesce(p_lote_id, gen_random_uuid());
+  v_path        text := nullif(btrim(coalesce(p_comprovante_path, '')), '');
+  v_digitos     text := regexp_replace(coalesce(p_telefone, ''), '[^0-9]', '', 'g');
 begin
   if auth.uid() is null then
     raise exception 'Entre na sua conta para registrar uma venda.';
@@ -908,6 +921,19 @@ begin
   end if;
   if length(btrim(coalesce(p_comprador, ''))) = 0 then
     raise exception 'Digite o nome do comprador.';
+  end if;
+  if length(btrim(p_comprador)) > 120 then
+    raise exception 'O nome do comprador passou do tamanho máximo.';
+  end if;
+  if length(btrim(coalesce(p_telefone, ''))) > 0
+     and (length(v_digitos) < 10 or length(v_digitos) > 13) then
+    raise exception 'Confira o telefone do comprador: coloque o DDD e o número.';
+  end if;
+  if coalesce(p_pagamento, '') not in ('dinheiro', 'pix') then
+    raise exception 'Escolha dinheiro ou Pix.';
+  end if;
+  if coalesce(p_status, '') not in ('pago', 'pendente') then
+    raise exception 'Escolha se o pagamento já foi recebido ou não.';
   end if;
 
   -- o vendedor só registra para si; líder e dev registram para alguém do grupo
@@ -930,11 +956,37 @@ begin
     raise exception 'Este vendedor saiu do acampamento e não registra mais vendas.';
   end if;
 
+  -- mesma compra chegando de novo (Salvar tocado outra vez depois de a
+  -- internet cair): devolve o que já foi gravado
+  if p_lote_id is not null then
+    perform pg_advisory_xact_lock(hashtext('rifas:lote:' || p_lote_id::text));
+    if exists (select 1 from public.vendas where lote_id = p_lote_id) then
+      if exists (select 1 from public.vendas
+                  where lote_id = p_lote_id and vendedor_id <> v_vendedor_id) then
+        raise exception 'Código de compra repetido. Feche a janela e registre de novo.';
+      end if;
+      return query select * from public.vendas where lote_id = p_lote_id order by numero;
+      return;
+    end if;
+  end if;
+
+  -- o comprovante precisa estar na pasta do grupo do vendedor e existir de
+  -- verdade (o app sempre envia o arquivo antes de registrar)
+  if v_path is not null then
+    if v_path not like v_vendedor.grupo || '/%' then
+      raise exception 'O comprovante não é deste grupo. Anexe o arquivo de novo.';
+    end if;
+    if not exists (select 1 from storage.objects
+                    where bucket_id = 'comprovantes' and name = v_path) then
+      raise exception 'Não encontramos o comprovante enviado. Anexe o arquivo de novo.';
+    end if;
+  end if;
+
   return query
   insert into public.vendas
     (vendedor_id, lote_id, comprador, telefone, pagamento, comprovante_path, status, grupo, numero)
   select v_vendedor_id, v_lote, btrim(p_comprador), nullif(btrim(coalesce(p_telefone, '')), ''),
-         p_pagamento, nullif(btrim(coalesce(p_comprovante_path, '')), ''), p_status,
+         p_pagamento, v_path, p_status,
          v_vendedor.grupo, 0        -- grupo e numero são reescritos pelo gatilho
   from generate_series(1, p_quantidade)
   returning *;
@@ -975,6 +1027,22 @@ begin
   ) then
     raise exception 'Esta compra não é sua, ou o repasse já começou a ser conferido.'
       using hint = 'Depois que a liderança começa a conferir o repasse, só ela pode alterar.';
+  end if;
+
+  if p_status is not null and p_status not in ('pago', 'pendente') then
+    raise exception 'Escolha se o pagamento já foi recebido ou não.';
+  end if;
+  if nullif(btrim(coalesce(p_comprovante_path, '')), '') is not null then
+    if not exists (
+      select 1 from public.vendas
+       where lote_id = p_lote_id and p_comprovante_path like grupo || '/%'
+    ) then
+      raise exception 'O comprovante não é deste grupo. Anexe o arquivo de novo.';
+    end if;
+    if not exists (select 1 from storage.objects
+                    where bucket_id = 'comprovantes' and name = p_comprovante_path) then
+      raise exception 'Não encontramos o comprovante enviado. Anexe o arquivo de novo.';
+    end if;
   end if;
 
   return query
@@ -1886,7 +1954,7 @@ revoke all on function public.vincular_vendedor(text)                           
 revoke all on function public.definir_codigo_de_lider(text, text)                   from public, anon;
 revoke all on function public.definir_codigo_de_vendedor(text, text)                from public, anon;
 revoke all on function public.registrar_vendedor_autonomo(text, text, text, text, text, text, text) from public, anon;
-revoke all on function public.registrar_venda(integer, text, text, text, text, text, uuid) from public, anon;
+revoke all on function public.registrar_venda(integer, text, text, text, text, text, uuid, uuid) from public, anon;
 revoke all on function public.assinar_termo(text, text, text) from public, anon;
 revoke all on function public.minha_chave_pix(text)                                 from public, anon;
 revoke all on function public.salvar_minha_chave_pix(text, text, text, text)         from public, anon;
@@ -1905,7 +1973,7 @@ grant execute on function public.vincular_vendedor(text)                        
 grant execute on function public.definir_codigo_de_lider(text, text)                   to authenticated;
 grant execute on function public.definir_codigo_de_vendedor(text, text)                to authenticated;
 grant execute on function public.registrar_vendedor_autonomo(text, text, text, text, text, text, text) to authenticated;
-grant execute on function public.registrar_venda(integer, text, text, text, text, text, uuid) to authenticated;
+grant execute on function public.registrar_venda(integer, text, text, text, text, text, uuid, uuid) to authenticated;
 grant execute on function public.assinar_termo(text, text, text) to authenticated;
 grant execute on function public.minha_chave_pix(text)                                 to authenticated;
 grant execute on function public.salvar_minha_chave_pix(text, text, text, text)         to authenticated;

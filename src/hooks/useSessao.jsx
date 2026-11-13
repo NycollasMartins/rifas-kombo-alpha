@@ -108,10 +108,18 @@ export function ProvedorSessao({ children }) {
     return { papel, grupo, vendedorId, podeCorrigirVenda: corrigirVenda }
   }, [papelDesejado, grupoDesejado])
 
+  // Quem está logado. O Supabase avisa "entrou" de novo TODA vez que o app
+  // volta pra frente (ao voltar da galeria/câmera depois de escolher a foto
+  // do comprovante, por exemplo) e a cada renovação do login. Se a conferência
+  // de acesso rodasse em cada aviso, a tela trocava por "Carregando…" e a
+  // janela de Registrar venda fechava sozinha, perdendo o que foi preenchido
+  // e a foto escolhida. Agora só confere de novo quando a PESSOA muda.
+  const usuarioId = sessao?.user?.id ?? null
+
   useEffect(() => {
     let ativo = true
 
-    if (!sessao) {
+    if (!usuarioId) {
       setAcesso(SEM_ACESSO)
       setVerificando(false)
       return undefined
@@ -126,7 +134,7 @@ export function ProvedorSessao({ children }) {
     return () => {
       ativo = false
     }
-  }, [sessao, carregarAcesso])
+  }, [usuarioId, carregarAcesso])
 
   const eDev = acesso.papel === 'dev'
 

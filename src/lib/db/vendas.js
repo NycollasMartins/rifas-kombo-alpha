@@ -48,8 +48,9 @@ export async function registrarVenda({
   status,
   comprovantePath,
   vendedorId,
+  loteId,
 }) {
-  const { data, error } = await supabase.rpc('registrar_venda', {
+  const parametros = {
     p_quantidade: quantidade,
     p_comprador: comprador,
     p_telefone: telefone || null,
@@ -57,7 +58,17 @@ export async function registrarVenda({
     p_status: status,
     p_comprovante_path: comprovantePath || null,
     p_vendedor_id: vendedorId || null,
+  }
+  // o código da compra faz o banco reconhecer um "Salvar" repetido (ver
+  // registrar_venda no schema.sql) e não registrar as rifas em dobro
+  let { data, error } = await supabase.rpc('registrar_venda', {
+    ...parametros,
+    p_lote_id: loteId || null,
   })
+  // banco ainda sem a versão nova do schema.sql: registra do jeito antigo
+  if (error?.code === 'PGRST202') {
+    ;({ data, error } = await supabase.rpc('registrar_venda', parametros))
+  }
   if (error) throw new Error(traduzirErro(error, 'Não foi possível registrar a venda.'))
   return (data || []).map(mapearVenda)
 }

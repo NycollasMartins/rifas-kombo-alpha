@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import BotaoArquivo from './BotaoArquivo'
+import PreviaArquivo from './PreviaArquivo'
 import Modal from './Modal'
 import { useDadosRifa } from '../hooks/useDadosRifa'
 import { enviarComprovante, validarArquivo } from '../lib/db/arquivos'
@@ -25,6 +26,7 @@ export default function ModalCompletarVenda({ lote, precoRifa, grupo, aoFechar }
   const [arquivo, setArquivo] = useState(null)
   const [erro, setErro] = useState('')
   const [etapa, setEtapa] = useState('')
+  const salvando = useRef(false)
 
   function escolherArquivo(escolhido) {
     const problema = validarArquivo(escolhido)
@@ -34,12 +36,15 @@ export default function ModalCompletarVenda({ lote, precoRifa, grupo, aoFechar }
   }
 
   async function salvar() {
+    if (salvando.current) return
+    salvando.current = true
     setErro('')
     try {
       const dados = { status }
       if (arquivo) {
         setEtapa('Enviando comprovante…')
-        dados.comprovantePath = await enviarComprovante(grupo, v.loteId, arquivo)
+        // a pasta é a do grupo da própria venda
+        dados.comprovantePath = await enviarComprovante(v.grupo || grupo, v.loteId, arquivo)
       }
       setEtapa('Salvando…')
       await completarCompra(v.loteId, dados)
@@ -47,6 +52,7 @@ export default function ModalCompletarVenda({ lote, precoRifa, grupo, aoFechar }
     } catch (e) {
       setErro(traduzirErro(e, 'Não foi possível salvar.'))
     } finally {
+      salvando.current = false
       setEtapa('')
     }
   }
@@ -95,7 +101,7 @@ export default function ModalCompletarVenda({ lote, precoRifa, grupo, aoFechar }
           </div>
 
           {arquivo ? (
-            <p className={estilos.nomeArquivo}>{arquivo.name}</p>
+            <PreviaArquivo arquivo={arquivo} />
           ) : v.comprovantePath ? (
             <p className={estilos.ajudaComprovante}>Já tem um comprovante anexado.</p>
           ) : (

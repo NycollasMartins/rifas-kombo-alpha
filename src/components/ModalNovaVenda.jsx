@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import BotaoArquivo from './BotaoArquivo'
+import PreviaArquivo from './PreviaArquivo'
 import Modal from './Modal'
 import BotoesDoWhatsapp from './BotoesDoWhatsapp'
 import { useDadosRifa } from '../hooks/useDadosRifa'
@@ -25,6 +26,11 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
   // dois toques rápidos em Salvar registravam a compra duas vezes (rifas em
   // dobro) antes do botão ficar desabilitado na tela
   const salvando = useRef(false)
+  // O código da compra nasce junto com a janela e não muda: se a internet
+  // cair e o vendedor tocar em Salvar de novo, o banco reconhece a mesma
+  // compra e não registra em dobro. O arquivo que já subiu é reaproveitado.
+  const loteId = useRef(novoLoteId())
+  const envioAnterior = useRef(null)
 
   const [comprador, setComprador] = useState('')
   const [telefone, setTelefone] = useState('')
@@ -55,6 +61,10 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
   async function salvar() {
     if (salvando.current) return
     if (!comprador.trim()) return setErro('Digite o nome do comprador.')
+    const digitos = telefone.replace(/\D/g, '')
+    if (telefone.trim() && (digitos.length < 10 || digitos.length > 13)) {
+      return setErro('Confira o telefone: coloque o DDD e o número, ou deixe em branco.')
+    }
     if (quantidade < 1 || quantidade > 50) return setErro('A quantidade precisa ser de 1 a 50.')
     if (pagamento === 'pix' && !arquivo && !anexarDepois) {
       return setErro('Anexe o comprovante do Pix, ou marque que vai anexar depois.')
@@ -64,11 +74,29 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
     salvando.current = true
     try {
       let comprovantePath = ''
-      const loteId = novoLoteId()
 
-      if (arquivo) {
-        setEtapa('Enviando comprovante…')
-        comprovantePath = await enviarComprovante(grupo, loteId, arquivo)
+      // foto anexada e depois trocou pra "Dinheiro": não manda a foto
+      if (pagamento === 'pix' && arquivo) {
+        if (envioAnterior.current?.arquivo === arquivo) {
+          comprovantePath = envioAnterior.current.caminho
+        } else {
+          setEtapa('Enviando comprovante…')
+          try {
+            // a pasta é a do grupo do VENDEDOR da venda
+            comprovantePath = await enviarComprovante(
+              vendedor?.grupo || grupo,
+              loteId.current,
+              arquivo
+            )
+          } catch (e) {
+            setErro(
+              `${e.message || 'Não foi possível enviar o comprovante.'} Toque em Salvar de novo. ` +
+                'Se continuar sem funcionar, tire o arquivo e marque "Não consigo anexar agora".'
+            )
+            return
+          }
+          envioAnterior.current = { arquivo, caminho: comprovantePath }
+        }
       }
 
       setEtapa('Registrando…')
@@ -80,9 +108,11 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
         status,
         comprovantePath,
         vendedorId,
+        loteId: loteId.current,
       })
       setResultado(criadas)
     } catch (e) {
+      if (/não encontramos o comprovante/i.test(e.message || '')) envioAnterior.current = null
       setErro(traduzirErro(e, 'Não foi possível registrar a venda.'))
     } finally {
       salvando.current = false
@@ -168,6 +198,8 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
           placeholder="Nome completo"
           value={comprador}
           onChange={(e) => setComprador(e.target.value)}
+          maxLength={80}
+          autoComplete="off"
           autoFocus
         />
       </div>
@@ -178,6 +210,8 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
           id="venda-telefone"
           type="tel"
           placeholder="(00) 00000-0000"
+          inputMode="tel"
+          maxLength={20}
           value={telefone}
           onChange={(e) => setTelefone(e.target.value)}
         />
@@ -243,7 +277,7 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
           </div>
 
           {arquivo ? (
-            <p className={estilos.nomeArquivo}>{arquivo.name}</p>
+            <PreviaArquivo arquivo={arquivo} />
           ) : (
             <p className={estilos.ajudaComprovante}>
               Tire um print ou foto do comprovante. A liderança confere depois.
