@@ -78,10 +78,9 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
             nome: recebedor.titular || item.nome,
             cidade: PIX_CIDADE,
             valor: total,
-            identificador: `RIFA${item.vendedorId.replace(/-/g, '').slice(0, 20)}`,
           })
         : '',
-    [recebedor, total, item.vendedorId, item.nome]
+    [recebedor, total, item.nome]
   )
 
   useEffect(() => {

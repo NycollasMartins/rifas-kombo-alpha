@@ -40,16 +40,20 @@ function crc16(texto) {
 }
 
 /**
- * Monta o texto do Pix pra um valor específico — um por compra, pra dar pra
- * saber (pelo valor) qual apadrinhamento é qual, sem depender de ninguém
- * digitar nada a mais na hora de pagar.
+ * Monta o texto do Pix com a chave do vendedor e o valor já preenchido.
+ *
+ * O identificador da transação (txid) vai SEMPRE como "***", que é o que o
+ * padrão do Banco Central manda usar em Pix por chave (QR estático). Antes
+ * ia um código nosso ("RIFA..."), e alguns bancos — o Inter, por exemplo —
+ * recusam receber um Pix estático com identificador que eles não emitiram:
+ * quem tinha chave no Inter não conseguia receber apadrinhamento nenhum.
  */
-export function montarPixCopiaECola({ chave, nome, cidade, valor, identificador }) {
+export function montarPixCopiaECola({ chave, nome, cidade, valor }) {
   const chaveLimpa = String(chave || '').trim()
   const nomeLimpo = limpar(nome, 25) || 'RECEBEDOR'
   const cidadeLimpa = limpar(cidade, 15) || 'BRASIL'
   const valorTexto = Number(valor || 0).toFixed(2)
-  const txid = limpar(identificador || 'RIFAS', 25) || 'RIFAS'
+  const txid = '***'
 
   const infoAdicional = campo('01', chaveLimpa)
   const merchantAccount = campo('26', campo('00', 'BR.GOV.BCB.PIX') + infoAdicional)
@@ -58,7 +62,7 @@ export function montarPixCopiaECola({ chave, nome, cidade, valor, identificador 
 
   const semCrc =
     campo('00', '01') +
-    campo('01', '11') + // "11" = pagamento com valor fixo (não permite a pessoa mudar)
+    campo('01', '11') + // "11" = QR estático (Pix por chave)
     merchantAccount +
     campo('52', '0000') +
     campo('53', '986') + // BRL
