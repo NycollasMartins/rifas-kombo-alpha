@@ -12,6 +12,7 @@ const MENSAGENS = {
   '23514': 'Algum campo foi preenchido de um jeito que o sistema não aceita.',
   '42501': SEM_PERMISSAO,
   PGRST301: 'Sua sessão expirou. Entre novamente.',
+  PGRST303: 'Sua sessão expirou. Puxe a tela pra baixo para atualizar ou entre novamente.',
 }
 
 export function traduzirErro(erro, padrao = 'Não foi possível concluir. Tente de novo.') {
@@ -35,8 +36,23 @@ export function traduzirErro(erro, padrao = 'Não foi possível concluir. Tente 
   if (erro.message === 'Email not confirmed') {
     return 'Este e-mail ainda não foi confirmado no painel do Supabase.'
   }
+  // dois vendedores registrando no mesmo instante pegavam o mesmo número de
+  // rifa — o banco agora evita isso, mas se acontecer a mensagem faz sentido
+  if (erro.code === '23505' && String(erro.message || '').includes('numero')) {
+    return 'Outra venda foi registrada no mesmo instante. Toque em salvar de novo.'
+  }
+  if (String(erro.message || '').includes('JWT expired')) {
+    return MENSAGENS.PGRST303
+  }
   if (erro.code && MENSAGENS[erro.code]) {
     return MENSAGENS[erro.code]
+  }
+  // erros que o próprio banco escreve (raise exception) muitas vezes trazem
+  // uma dica do que fazer — "peça ao líder pra cadastrar você", "use Entrar"…
+  // Antes só a primeira frase chegava na tela e a pessoa ficava sem saber o
+  // que fazer.
+  if (erro.code === 'P0001' && erro.message) {
+    return erro.hint ? `${erro.message} ${erro.hint}` : erro.message
   }
   if (typeof erro.message === 'string' && erro.message.includes('row-level security')) {
     return SEM_PERMISSAO

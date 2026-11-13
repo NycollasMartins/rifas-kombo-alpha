@@ -22,6 +22,9 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
   const { grupo } = useSessao()
   const vendedor = buscarVendedor(vendedorId)
   const inputArquivo = useRef(null)
+  // dois toques rápidos em Salvar registravam a compra duas vezes (rifas em
+  // dobro) antes do botão ficar desabilitado na tela
+  const salvando = useRef(false)
 
   const [comprador, setComprador] = useState('')
   const [telefone, setTelefone] = useState('')
@@ -53,6 +56,7 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
   }
 
   async function salvar() {
+    if (salvando.current) return
     if (!comprador.trim()) return setErro('Digite o nome do comprador.')
     if (quantidade < 1 || quantidade > 50) return setErro('A quantidade precisa ser de 1 a 50.')
     if (pagamento === 'pix' && !arquivo && !anexarDepois) {
@@ -60,6 +64,7 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
     }
 
     setErro('')
+    salvando.current = true
     try {
       let comprovantePath = ''
       const loteId = novoLoteId()
@@ -83,6 +88,7 @@ export default function ModalNovaVenda({ vendedorId, aoFechar }) {
     } catch (e) {
       setErro(traduzirErro(e, 'Não foi possível registrar a venda.'))
     } finally {
+      salvando.current = false
       setEtapa('')
     }
   }

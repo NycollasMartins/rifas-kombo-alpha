@@ -89,6 +89,11 @@ export function ProvedorDadosRifa({ children }) {
 
       async function buscarTudo() {
         try {
+          // Celular voltando do bloqueio: o token de login pode ter vencido
+          // enquanto a tela estava apagada, e as buscas saíam antes dele ser
+          // renovado — o banco recusava (401) e a tela ficava com dados
+          // velhos sem avisar. getSession() espera a renovação terminar.
+          await supabase.auth.getSession()
           const [cfgs, vds, vs, srt, priv] = await Promise.all([
             listarConfigs(),
             listarVendedores(),

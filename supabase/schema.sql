@@ -184,6 +184,7 @@ create table if not exists public.vendedores (
 
 create index if not exists vendedores_grupo_idx on public.vendedores (grupo);
 create index if not exists vendedores_email_idx on public.vendedores (lower(email));
+create index if not exists vendedores_user_idx on public.vendedores (user_id);
 
 alter table public.vendedores add column if not exists telefone text;
 alter table public.vendedores add column if not exists termo_digital_em timestamptz;
@@ -280,6 +281,7 @@ create unique index if not exists perfis_vendedor_por_grupo_unico
   on public.perfis (usuario_id, grupo) where papel = 'vendedor';
 
 create index if not exists perfis_usuario_idx on public.perfis (usuario_id);
+create index if not exists perfis_vendedor_idx on public.perfis (vendedor_id);
 
 -- ---- vendedores_privado: o que NÃO pode circular ---------------------------
 create table if not exists public.vendedores_privado (
@@ -812,6 +814,12 @@ begin
     raise exception 'Vendedor não encontrado.';
   end if;
 
+  -- Dois vendedores registrando no mesmo instante enxergavam o mesmo "menor
+  -- número livre" e um deles levava erro de número repetido. A trava deixa
+  -- as vendas DO MESMO GRUPO entrarem uma de cada vez (só pelo tempo de
+  -- gravar — é coisa de milissegundos); termina sozinha no fim da gravação.
+  perform pg_advisory_xact_lock(hashtext('rifas:numero:' || v_grupo));
+
   select min(t.n) into v_numero
   from generate_series(
     1, (select coalesce(max(numero), 0) + 1 from public.vendas where grupo = v_grupo)
@@ -1192,6 +1200,38 @@ create trigger vendedores_privado_sincronizar_pix
   after insert or update of pix_chave on public.vendedores_privado
   for each row execute function public.sincronizar_tem_pix();
 
+/**
+ * Liga as notificações deste aparelho pro vendedor logado. Se o mesmo
+ * aparelho já estava inscrito por OUTRO vendedor (irmãos dividindo o
+ * celular), passa pra quem está usando agora — pela tabela direto a regra
+ * de acesso não deixava, e a notificação nunca ligava (erro 403).
+ */
+create or replace function public.salvar_inscricao_push(
+  p_vendedor_id uuid,
+  p_endpoint    text,
+  p_p256dh      text,
+  p_auth        text
+)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+begin
+  if not public.e_meu_vendedor(p_vendedor_id) then
+    raise exception 'Só o próprio vendedor liga as notificações dele.';
+  end if;
+  if length(coalesce(p_endpoint, '')) < 10 then
+    raise exception 'Inscrição de notificação inválida.';
+  end if;
+
+  insert into public.inscricoes_push (vendedor_id, endpoint, p256dh, auth)
+  values (p_vendedor_id, p_endpoint, p_p256dh, p_auth)
+  on conflict (endpoint) do update
+    set vendedor_id = excluded.vendedor_id,
+        p256dh      = excluded.p256dh,
+        auth        = excluded.auth;
+end;
+$$;
+
 -- ============================================================================
 --  7. FECHAMENTO E MANUTENÇÃO
 -- ============================================================================
@@ -1565,9 +1605,9 @@ drop policy if exists "perfis: cada um vê o seu" on public.perfis;
 create policy "perfis: cada um vê o seu"
   on public.perfis for select to authenticated
   using (
-    usuario_id = auth.uid()
-    or public.e_dev()
-    or (public.e_lider() and grupo = public.meu_grupo())
+    usuario_id = (select auth.uid())
+    or (select public.e_dev())
+    or ((select public.e_lider()) and grupo = (select public.meu_grupo()))
   );
 
 drop policy if exists "perfis: só o dev gerencia" on public.perfis;
@@ -1729,6 +1769,10 @@ revoke all on function public.fechar_meta_do_vendedor(uuid, text)               
 revoke all on function public.transferir_vendas(uuid, uuid)                         from public, anon;
 revoke all on function public.apagar_dados_do_grupo(text)                           from public, anon;
 revoke all on function public.forcar_reenvio_webhooks()                             from public, anon;
+revoke all on function public.salvar_inscricao_push(uuid, text, text, text)          from public, anon;
+-- só o job agendado (dono do banco) chama; ninguém de fora precisa disparar
+-- reenvio de webhook direto (o dev usa forcar_reenvio_webhooks)
+revoke all on function public.reenviar_webhooks_pendentes()                         from public, anon, authenticated;
 
 grant execute on function public.registrar_lider(text, text, text)                     to authenticated;
 grant execute on function public.vincular_vendedor(text)                               to authenticated;
@@ -1744,6 +1788,7 @@ grant execute on function public.fechar_meta_do_vendedor(uuid, text)            
 grant execute on function public.transferir_vendas(uuid, uuid)                         to authenticated;
 grant execute on function public.apagar_dados_do_grupo(text)                           to authenticated;
 grant execute on function public.forcar_reenvio_webhooks()                             to authenticated;
+grant execute on function public.salvar_inscricao_push(uuid, text, text, text)          to authenticated;
 grant execute on function public.meu_papel(text, text), public.meu_grupo(text, text), public.e_dev(text, text),
                           public.e_lider(text, text), public.meu_vendedor_id(text, text),
                           public.posso_ver(text), public.codigo_definido(text),
