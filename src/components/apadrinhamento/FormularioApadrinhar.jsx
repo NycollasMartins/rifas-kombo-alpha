@@ -21,7 +21,7 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
 
   // se a página recarregou no meio (voltou do app do banco), retoma de onde parou
   const [rascunho] = useState(() => {
-    const salvo = lerRascunho()
+    const salvo = lerRascunho(item.grupo)
     return salvo?.vendedorId === item.vendedorId ? salvo : null
   })
   const [quantidade, setQuantidade] = useState(() =>
@@ -56,11 +56,11 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
 
   useEffect(() => {
     if (resultado) return
-    salvarRascunho({ vendedorId: item.vendedorId, quantidade, comprador, telefone })
-  }, [item.vendedorId, quantidade, comprador, telefone, resultado])
+    salvarRascunho({ vendedorId: item.vendedorId, quantidade, comprador, telefone }, item.grupo)
+  }, [item.vendedorId, item.grupo, quantidade, comprador, telefone, resultado])
 
   function voltar() {
-    apagarRascunho()
+    apagarRascunho(item.grupo)
     aoVoltar()
   }
 
@@ -215,7 +215,7 @@ export default function FormularioApadrinhar({ item, aoVoltar }) {
         telefone: telefone.trim(),
         comprovantePath,
       })
-      apagarRascunho()
+      apagarRascunho(item.grupo)
       setResultado({
         criadas,
         loteId: criadas[0]?.loteId,

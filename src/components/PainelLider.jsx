@@ -10,7 +10,7 @@ import AbaUsuarios from './lider/AbaUsuarios'
 import AbaConfiguracoes from './lider/AbaConfiguracoes'
 import AbaManutencao from './lider/AbaManutencao'
 import { useSessao } from '../hooks/useSessao'
-import { ALPHA, infoDoGrupo } from '../utils/grupos'
+import { GRUPOS, infoDoGrupo } from '../utils/grupos'
 import estilos from './PainelLider.module.css'
 
 const ABAS = [
@@ -33,9 +33,9 @@ export default function PainelLider() {
   const info = infoDoGrupo(grupo)
   const [abaAtiva, setAbaAtiva] = useState('painel')
 
-  // Apadrinhamento é só do Alpha — some pra quem está olhando o Kombo.
-  const abasDoGrupo =
-    grupo === ALPHA ? ABAS : ABAS.filter((a) => a.chave !== 'apadrinhamento')
+  // Alpha e Kombo têm cada um o seu apadrinhamento (a aba mostra só o do
+  // grupo que está aberto, como todas as outras)
+  const abasDoGrupo = GRUPOS.includes(grupo) ? ABAS : ABAS.filter((a) => a.chave !== 'apadrinhamento')
   const abas = eDev || podeCorrigirVenda ? [...abasDoGrupo, ABA_DO_DEV] : abasDoGrupo
   const { Componente } = abas.find((a) => a.chave === abaAtiva) || abas[0]
 

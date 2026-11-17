@@ -20,10 +20,16 @@ export function mapearParaApadrinhar(linha) {
   }
 }
 
-export async function listarParaApadrinhar() {
-  const { data, error } = await supabase.rpc('listar_para_apadrinhar')
+/** Só quem é do grupo pedido: o apadrinhamento do Alpha e o do Kombo não se misturam. */
+export async function listarParaApadrinhar(grupo = 'Alpha') {
+  let { data, error } = await supabase.rpc('listar_para_apadrinhar', { p_grupo: grupo })
+  // banco ainda sem o schema novo (função sem parâmetro, só Alpha)
+  if (error?.code === 'PGRST202') {
+    ;({ data, error } = await supabase.rpc('listar_para_apadrinhar'))
+  }
   if (error) throw new Error(traduzirErro(error, 'Não foi possível carregar a lista.'))
-  return (data || []).map(mapearParaApadrinhar)
+  // trava extra: nunca mostra alguém de outro grupo nesta lista
+  return (data || []).map(mapearParaApadrinhar).filter((v) => v.grupo === grupo)
 }
 
 export async function registrarApadrinhamento({

@@ -9,27 +9,30 @@
  * anexa de novo, se for o caso.
  */
 
-const CHAVE = 'apadrinhamento:rascunho'
+// um rascunho por grupo: o do Alpha continua com o nome de sempre
+function chave(grupo) {
+  return !grupo || grupo === 'Alpha' ? 'apadrinhamento:rascunho' : `apadrinhamento:rascunho:${grupo}`
+}
 
-export function lerRascunho() {
+export function lerRascunho(grupo) {
   try {
-    return JSON.parse(sessionStorage.getItem(CHAVE) || 'null')
+    return JSON.parse(sessionStorage.getItem(chave(grupo)) || 'null')
   } catch {
     return null
   }
 }
 
-export function salvarRascunho(rascunho) {
+export function salvarRascunho(rascunho, grupo) {
   try {
-    sessionStorage.setItem(CHAVE, JSON.stringify(rascunho))
+    sessionStorage.setItem(chave(grupo), JSON.stringify(rascunho))
   } catch {
     // aba anônima / armazenamento bloqueado: segue sem rascunho
   }
 }
 
-export function apagarRascunho() {
+export function apagarRascunho(grupo) {
   try {
-    sessionStorage.removeItem(CHAVE)
+    sessionStorage.removeItem(chave(grupo))
   } catch {
     // idem
   }

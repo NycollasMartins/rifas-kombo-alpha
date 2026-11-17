@@ -1080,9 +1080,14 @@ $$;
  * fórmula de sempre (preço x quantidade paga) — aqui só entrega os
  * ingredientes (meta e preço já resolvidos por vendedor) e as quantidades.
  *
- * Só Alpha, de propósito — o Kombo não entra no apadrinhamento.
+ * Cada grupo tem o seu apadrinhamento, separado: "p_grupo" diz de qual
+ * grupo é a lista (link /apadrinhar = Alpha, /apadrinhar/kb = Kombo). Sem
+ * o parâmetro continua sendo o Alpha, como sempre foi.
  */
-create or replace function public.listar_para_apadrinhar()
+-- a versão sem parâmetro ficaria como uma segunda função com o mesmo nome
+drop function if exists public.listar_para_apadrinhar();
+
+create or replace function public.listar_para_apadrinhar(p_grupo text default 'Alpha')
 returns table (
   vendedor_id uuid,
   nome        text,
@@ -1097,14 +1102,18 @@ language sql stable security definer set search_path = public as $$
     v.id,
     v.nome,
     v.grupo,
-    coalesce(v.meta, c.meta_padrao) as meta,
-    c.preco_rifa as preco,
+    -- no Kombo, quem vai para o chalé tem preço e meta próprios (mesma regra
+    -- do app); no Alpha não existe chalé, então fica exatamente como era
+    coalesce(v.meta, case when v.grupo = 'Kombo' and v.destino = 'chale'
+                          then c.meta_chale else c.meta_padrao end) as meta,
+    case when v.grupo = 'Kombo' and v.destino = 'chale'
+         then c.preco_rifa_chale else c.preco_rifa end as preco,
     coalesce((select count(*)::int from public.vendas where vendedor_id = v.id and status = 'pago'), 0),
     coalesce((select count(*)::int from public.vendas where vendedor_id = v.id and status = 'pendente'), 0)
   from public.vendedores v
   join public.config c on c.grupo = v.grupo
   -- sem chave Pix cadastrada não tem pra onde mandar o dinheiro: fica de fora
-  where v.situacao = 'ativo' and v.grupo = 'Alpha' and v.tem_pix
+  where v.situacao = 'ativo' and v.grupo = coalesce(p_grupo, 'Alpha') and v.tem_pix
   order by v.nome
 $$;
 
@@ -1120,7 +1129,7 @@ language sql stable security definer set search_path = public as $$
   from public.vendedores v
   join public.vendedores_privado p on p.vendedor_id = v.id
   where v.id = p_vendedor_id
-    and v.situacao = 'ativo' and v.grupo = 'Alpha' and v.tem_pix
+    and v.situacao = 'ativo' and v.grupo in ('Alpha', 'Kombo') and v.tem_pix
 $$;
 
 /**
@@ -1170,8 +1179,8 @@ begin
   if not found then
     raise exception 'Vendedor não encontrado.';
   end if;
-  if v_vendedor.grupo <> 'Alpha' then
-    raise exception 'O apadrinhamento é só para o Alpha no momento.';
+  if v_vendedor.grupo not in ('Alpha', 'Kombo') then
+    raise exception 'Vendedor não encontrado.';
   end if;
   if v_vendedor.situacao <> 'ativo' then
     raise exception 'Esse vendedor já não precisa mais de apadrinhamento. Muito obrigado pelo carinho!';
@@ -1228,8 +1237,10 @@ begin
 
   -- trava contra robô: o formulário é público, então limita quantos
   -- apadrinhamentos entram em pouco tempo (o normal é uns 25 por dia)
+  -- (conta separado por grupo: o movimento de um não trava o outro)
   if (select count(distinct lote_id) from public.vendas
-       where origem = 'apadrinhamento' and data > now() - interval '10 minutes') >= 30 then
+       where origem = 'apadrinhamento' and grupo = v_vendedor.grupo
+         and data > now() - interval '10 minutes') >= 30 then
     raise exception 'Muitos apadrinhamentos ao mesmo tempo. Espere alguns minutos e toque em "Concluir" de novo.';
   end if;
 
@@ -2070,7 +2081,7 @@ grant execute on function public.meu_papel(text, text), public.meu_grupo(text, t
 
 -- o formulário de apadrinhar é público de propósito — essas quatro são as
 -- únicas funções liberadas pra quem não fez login nenhum
-grant execute on function public.listar_para_apadrinhar()                                          to anon, authenticated;
+grant execute on function public.listar_para_apadrinhar(text)                                      to anon, authenticated;
 grant execute on function public.pix_para_apadrinhar(uuid)                                         to anon, authenticated;
 grant execute on function public.registrar_apadrinhamento(uuid, integer, text, text, text)          to anon, authenticated;
 grant execute on function public.anexar_comprovante_apadrinhamento(uuid, text)                     to anon, authenticated;
@@ -2140,13 +2151,14 @@ begin
   -- quem apadrinha não faz login nenhum, mas consegue ENVIAR o comprovante
   -- (nunca listar/abrir o de ninguém — isso continua só pra liderança, na
   -- política acima)
-  -- só na pasta do Alpha (o apadrinhamento é só do Alpha) e só no formato de
-  -- nome que o app gera: "Alpha/<código>.<extensão>", sem subpastas
+  -- só na pasta de um dos grupos (cada um tem o seu apadrinhamento) e só no
+  -- formato de nome que o app gera: "Alpha/<código>.<extensão>" ou
+  -- "Kombo/<código>.<extensão>", sem subpastas
   execute $p$create policy "comprovantes: apadrinhamento anonimo envia"
     on storage.objects for insert to anon
     with check (
       bucket_id = 'comprovantes'
-      and name ~ '^Alpha/[A-Za-z0-9-]{8,64}\.(jpg|jpeg|jfif|png|webp|gif|heic|heif|bmp|pdf)$'
+      and name ~ '^(Alpha|Kombo)/[A-Za-z0-9-]{8,64}\.(jpg|jpeg|jfif|png|webp|gif|heic|heif|bmp|pdf)$'
     )$p$;
 
 exception when others then

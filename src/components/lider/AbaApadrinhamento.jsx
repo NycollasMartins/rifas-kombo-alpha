@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import EstadoVazio from '../EstadoVazio'
 import EtiquetaStatus from '../EtiquetaStatus'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
+import { useSessao } from '../../hooks/useSessao'
+import { KOMBO } from '../../utils/grupos'
 import { agruparPorLote } from '../../lib/db/vendas'
 import ModalComprovante from '../ModalComprovante'
 import { precoDoVendedor } from '../../utils/calculos'
@@ -19,6 +21,7 @@ import estilos from './AbaApadrinhamento.module.css'
  */
 export default function AbaApadrinhamento() {
   const { config, vendas, buscarVendedor, mudarStatusDoLote, removerLote } = useDadosRifa()
+  const { grupo } = useSessao()
   const [vendoLote, setVendoLote] = useState(null)
   const [confirmando, setConfirmando] = useState('')
   const [erro, setErro] = useState('')
@@ -106,7 +109,10 @@ export default function AbaApadrinhamento() {
       {lotes.length === 0 ? (
         <EstadoVazio icone="🙏">
           <p>Ninguém apadrinhou ninguém ainda.</p>
-          <p>Mande o link de /apadrinhar pra quem quiser ajudar.</p>
+          <p>
+            Mande o link de {grupo === KOMBO ? '/apadrinhar/kb' : '/apadrinhar'} pra quem quiser
+            ajudar.
+          </p>
         </EstadoVazio>
       ) : (
         <div className="card">

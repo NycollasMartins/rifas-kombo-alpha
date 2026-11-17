@@ -6,7 +6,7 @@ import ModalVendasDoVendedor from '../ModalVendasDoVendedor'
 import { useDadosRifa } from '../../hooks/useDadosRifa'
 import { useSessao } from '../../hooks/useSessao'
 import { precoDoVendedor, resumoDoVendedor, vendasDoVendedor } from '../../utils/calculos'
-import { ALPHA, rotuloDoTipoPlural } from '../../utils/grupos'
+import { GRUPOS, rotuloDoTipoPlural } from '../../utils/grupos'
 import { formatarMoeda } from '../../utils/formato'
 import { baixarCsvDeVendedores } from '../../utils/csv'
 import { rifasParaFecharMeta } from '../../utils/prazo'
@@ -56,8 +56,8 @@ export default function AbaVendedores() {
   const [filtroTipo, setFiltroTipo] = useState('') // '' = todos
   const [filtroPix, setFiltroPix] = useState('') // '' = todos | 'sem' | 'com'
 
-  // chave Pix só importa no Alpha (é pra onde vai o apadrinhamento)
-  const pedePix = grupo === ALPHA
+  // chave Pix é pra onde vai o apadrinhamento (Alpha e Kombo, cada um o seu)
+  const pedePix = GRUPOS.includes(grupo)
   // só conta quem ainda está vendendo: quem já fechou a meta (ou desistiu)
   // não precisa mais de apadrinhamento, então não precisa de chave Pix
   const contagemPix = useMemo(() => {

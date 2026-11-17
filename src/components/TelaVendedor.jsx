@@ -13,7 +13,7 @@ import { useSessao } from '../hooks/useSessao'
 import { precoDoVendedor, resumoDoVendedor, vendasDoVendedor } from '../utils/calculos'
 import { agruparPorLote } from '../lib/db/vendas'
 import { formatarMoeda } from '../utils/formato'
-import { ALPHA, infoDoGrupo } from '../utils/grupos'
+import { GRUPOS, infoDoGrupo } from '../utils/grupos'
 import estilos from './TelaVendedor.module.css'
 
 /** A tela de quem vende: progresso, prazo e as próprias rifas. */
@@ -64,8 +64,8 @@ export default function TelaVendedor() {
         </div>
       )}
 
-      {/* a chave Pix é pra onde vai o apadrinhamento — que por enquanto é só do Alpha */}
-      {!saiu && grupo === ALPHA && <CartaoChavePix vendedor={meuCadastro} grupo={grupo} />}
+      {/* a chave Pix é pra onde vai o apadrinhamento (Alpha e Kombo, cada um o seu) */}
+      {!saiu && GRUPOS.includes(grupo) && <CartaoChavePix vendedor={meuCadastro} grupo={grupo} />}
 
       {!saiu && !meuCadastro.termoDigitalEm && (
         <div className={estilos.avisoPrazo}>

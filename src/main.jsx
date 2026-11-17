@@ -7,6 +7,7 @@ import { ProvedorDadosRifa } from './hooks/useDadosRifa'
 import { supabaseConfigurado } from './lib/supabase'
 import { registrarServiceWorker } from './utils/instalacao'
 import { observarNovaVersao } from './utils/atualizacoes'
+import { ALPHA, KOMBO } from './utils/grupos'
 import './styles/global.css'
 
 // destrava o botão "Instalar" no Android; não guarda nada em cache
@@ -21,13 +22,18 @@ const raiz = createRoot(document.getElementById('root'))
 // nasce FORA de ProvedorSessao/ProvedorDadosRifa, que pressupõem alguém já
 // identificado. Sem biblioteca de rotas: é a única tela que não faz parte
 // da máquina de estados de App.jsx.
+// Cada grupo tem o seu link, separado: /apadrinhar é o do Alpha (o que já
+// circula) e /apadrinhar/kb é o do Kombo.
 const ehApadrinhamento = window.location.pathname.startsWith('/apadrinhar')
+const grupoDoApadrinhamento = /^\/apadrinhar\/(kb|kombo)\/?$/i.test(window.location.pathname)
+  ? KOMBO
+  : ALPHA
 
 raiz.render(
   !supabaseConfigurado ? (
     <TelaConfiguracaoFaltando />
   ) : ehApadrinhamento ? (
-    <TelaApadrinhar />
+    <TelaApadrinhar grupo={grupoDoApadrinhamento} />
   ) : (
     <ProvedorSessao>
       <ProvedorDadosRifa>

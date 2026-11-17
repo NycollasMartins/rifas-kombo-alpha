@@ -6,7 +6,7 @@ import CamposChavePix from './CamposChavePix'
 import { formatarChavePix, normalizarChavePix } from '../utils/chavePix'
 import { useDadosRifa } from '../hooks/useDadosRifa'
 import { useSessao } from '../hooks/useSessao'
-import { ALPHA, infoDoGrupo, rotuloDoTipo, KOMBO } from '../utils/grupos'
+import { ALPHA, GRUPOS, infoDoGrupo, rotuloDoTipo, KOMBO } from '../utils/grupos'
 import { montarMensagemDeAcesso, montarMensagemDoTermo } from '../utils/whatsapp'
 import { metaDoVendedor, precoDoVendedor } from '../utils/calculos'
 import { traduzirErro } from '../lib/db/erros'
@@ -329,7 +329,7 @@ export default function ModalVendedor({ vendedor, aoFechar }) {
             />
           </div>
 
-          {grupo === ALPHA && (
+          {GRUPOS.includes(grupo) && (
             <div className="field">
               <label>Chave Pix (onde cai o apadrinhamento)</label>
               <p className="texto-ajuda" style={{ margin: '0 0 8px' }}>

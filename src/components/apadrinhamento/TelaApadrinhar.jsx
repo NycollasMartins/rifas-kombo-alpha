@@ -5,7 +5,7 @@ import FormularioApadrinhar from './FormularioApadrinhar'
 import { listarParaApadrinhar } from '../../lib/db/apadrinhamento'
 import { bateBusca } from '../../utils/busca'
 import { formatarMoeda } from '../../utils/formato'
-import { infoDoGrupo } from '../../utils/grupos'
+import { ALPHA, KOMBO, aplicarTemaDoGrupo, infoDoGrupo, rotuloDoTipo } from '../../utils/grupos'
 import { apagarRascunho, lerRascunho } from '../../utils/rascunhoApadrinhamento'
 import estilos from './TelaApadrinhar.module.css'
 
@@ -13,29 +13,37 @@ import estilos from './TelaApadrinhar.module.css'
  * Formulário público de apadrinhamento — sem login nenhum (ver main.jsx,
  * rota "/apadrinhar"). Qualquer um escolhe um vendedor que ainda está
  * devendo e compra rifas em nome dele via Pix.
+ *
+ * Cada grupo tem o seu, separado (ver main.jsx): /apadrinhar mostra só o
+ * Alpha e /apadrinhar/kb mostra só o Kombo.
  */
-export default function TelaApadrinhar() {
+export default function TelaApadrinhar({ grupo = ALPHA }) {
   const [lista, setLista] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [busca, setBusca] = useState('')
   const [escolhido, setEscolhido] = useState(null)
 
+  // o do Kombo ganha as cores do Kombo; o do Alpha fica como sempre foi
+  useEffect(() => {
+    if (grupo === KOMBO) aplicarTemaDoGrupo(KOMBO)
+  }, [grupo])
+
   useEffect(() => {
     let ativo = true
-    listarParaApadrinhar()
+    listarParaApadrinhar(grupo)
       .then((l) => ativo && setLista(l))
       .catch((e) => ativo && setErro(e.message))
       .finally(() => ativo && setCarregando(false))
     return () => {
       ativo = false
     }
-  }, [])
+  }, [grupo])
 
   // puxar pra atualizar: busca a lista de novo (quem bateu a meta sai dela)
   async function atualizarLista() {
     try {
-      setLista(await listarParaApadrinhar())
+      setLista(await listarParaApadrinhar(grupo))
       setErro('')
     } catch (e) {
       setErro(e.message)
@@ -63,11 +71,11 @@ export default function TelaApadrinhar() {
   useEffect(() => {
     if (jaRetomou.current || carregando || erro) return
     jaRetomou.current = true
-    const rascunho = lerRascunho()
+    const rascunho = lerRascunho(grupo)
     const retomado = rascunho && comConta.find((v) => v.vendedorId === rascunho.vendedorId)
     if (retomado) setEscolhido(retomado)
-    else if (rascunho) apagarRascunho() // a pessoa já saiu da lista (bateu a meta)
-  }, [carregando, erro, comConta])
+    else if (rascunho) apagarRascunho(grupo) // a pessoa já saiu da lista (bateu a meta)
+  }, [carregando, erro, comConta, grupo])
 
   const filtrada = useMemo(() => {
     const termo = busca.trim()
@@ -93,7 +101,7 @@ export default function TelaApadrinhar() {
       {puxar}
       <div className={estilos.cabecalho}>
         <div className={estilos.chama}>🔥</div>
-        <h1 className={estilos.titulo}>Apadrinhe um Adolescente</h1>
+        <h1 className={estilos.titulo}>Apadrinhe um {rotuloDoTipo(grupo)}</h1>
         <p className={estilos.subtitulo}>
           Escolha quem ainda está devendo e ajude a completar a meta dele(a). É rapidinho, via Pix.
         </p>
