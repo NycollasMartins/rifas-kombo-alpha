@@ -1476,7 +1476,15 @@ begin
     raise exception 'Este vendedor desistiu do acampamento. Não faz sentido fechar a meta dele.';
   end if;
 
-  select preco_rifa, meta_padrao into v_preco, v_meta
+  -- no Kombo, quem vai para o chalé tem preço e meta próprios: a conta tem
+  -- de ser a mesma que a tela mostra ao líder antes de confirmar (antes o
+  -- banco usava sempre o preço e a meta do quarto). No Alpha não existe
+  -- chalé, então lá nada muda.
+  select case when v_vendedor.grupo = 'Kombo' and v_vendedor.destino = 'chale'
+              then preco_rifa_chale else preco_rifa end,
+         case when v_vendedor.grupo = 'Kombo' and v_vendedor.destino = 'chale'
+              then meta_chale else meta_padrao end
+    into v_preco, v_meta
     from public.config where grupo = v_vendedor.grupo;
   v_meta := coalesce(v_vendedor.meta, v_meta);
 
