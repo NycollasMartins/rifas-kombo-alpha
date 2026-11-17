@@ -19,6 +19,10 @@ export function mapearVendedor(linha) {
     // só o "tem ou não tem" — a chave em si fica em vendedores_privado
     temPix: Boolean(linha.tem_pix),
     acessoEnviadoEm: linha.acesso_enviado_em || '',
+    // removido pela liderança depois de já ter vendido: some das listas, mas
+    // continua aqui pra dar nome às rifas que vendeu (vendas, sorteio, CSV)
+    removido: Boolean(linha.removido_em),
+    removidoEm: linha.removido_em || '',
     criadoEm: linha.created_at,
   }
 }
@@ -76,9 +80,20 @@ export async function atualizarVendedor(
   return mapearVendedor(linha)
 }
 
+/**
+ * Tira o vendedor do sistema. Sem rifas, apaga de vez; com rifas, o banco
+ * guarda o cadastro só como "quem vendeu" e as rifas continuam valendo.
+ * Devolve 'excluido' ou 'removido'.
+ */
 export async function excluirVendedor(id) {
-  verificar(
-    await supabase.from('vendedores').delete().eq('id', id),
-    'Não foi possível excluir o vendedor.'
-  )
+  const resposta = await supabase.rpc('remover_vendedor', { p_vendedor_id: id })
+  // banco ainda sem o schema novo: faz como antes (só apaga quem não tem rifa)
+  if (resposta.error?.code === 'PGRST202') {
+    verificar(
+      await supabase.from('vendedores').delete().eq('id', id),
+      'Não foi possível excluir o vendedor.'
+    )
+    return 'excluido'
+  }
+  return verificar(resposta, 'Não foi possível excluir o vendedor.') || 'excluido'
 }

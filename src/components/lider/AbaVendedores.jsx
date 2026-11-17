@@ -18,7 +18,7 @@ import estilos from './AbaVendedores.module.css'
 export default function AbaVendedores() {
   const {
     config,
-    vendedores: todosDoGrupo,
+    vendedores: comRemovidos,
     vendas,
     dadosPrivados,
     removerVendedor,
@@ -26,6 +26,10 @@ export default function AbaVendedores() {
     marcarComoFinalizado,
   } = useDadosRifa()
   const { grupo } = useSessao()
+
+  // Quem foi excluído depois de já ter vendido continua no banco só pra dar
+  // nome às rifas dele (aba Vendas, sorteio, CSV). Aqui ele não aparece mais.
+  const todosDoGrupo = useMemo(() => comRemovidos.filter((v) => !v.removido), [comRemovidos])
 
   const [mostrarFinalizados, setMostrarFinalizados] = useState(false)
 
@@ -46,6 +50,7 @@ export default function AbaVendedores() {
   const [emEdicao, setEmEdicao] = useState(null) // 'novo' | vendedor
   const [vendoVendasDe, setVendoVendasDe] = useState(null)
   const [erro, setErro] = useState('')
+  const [aviso, setAviso] = useState('')
   const [ocupado, setOcupado] = useState('')
   const [busca, setBusca] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('') // '' = todos
@@ -109,22 +114,52 @@ export default function AbaVendedores() {
   }, [vendedores, vendas, config])
 
   async function excluir(vendedor) {
-    const quantidade = vendasDoVendedor(vendas, vendedor.id).length
-    if (quantidade > 0) {
+    const minhas = vendasDoVendedor(vendas, vendedor.id)
+    const quantidade = minhas.length
+
+    if (quantidade === 0) {
+      if (!confirm(`Excluir ${vendedor.nome}?`)) return
+    } else if (vendedor.situacao === 'quitou') {
       alert(
-        `${vendedor.nome} já tem ${quantidade} rifa(s) registrada(s) e não pode ser excluído, ` +
-          'porque o registro desse dinheiro precisa continuar existindo.\n\n' +
-          'Se ele não vai mais ao acampamento, edite e marque a situação como "Desistiu".'
+        `${vendedor.nome} já fechou a meta, então a vaga dele está paga.\n\n` +
+          'Se ele desistiu mesmo assim, toque em Editar, marque a situação como "Desistiu" ' +
+          'e depois exclua.'
       )
       return
+    } else {
+      const pendentes = minhas.filter((v) => v.status === 'pendente').length
+      const texto =
+        `${vendedor.nome} já vendeu ${quantidade} rifa(s).\n\n` +
+        'Ao excluir:\n' +
+        '• ele sai da lista de vendedores e perde o acesso ao app;\n' +
+        `• as ${quantidade} rifa(s) continuam valendo, com o mesmo número e no nome de quem ` +
+        'comprou, e entram no sorteio normalmente;\n' +
+        (vendedor.situacao === 'ativo'
+          ? '• ele passa a contar como desistente, e o valor que arrecadou fica para a igreja;\n'
+          : '• o valor que ele arrecadou continua contando para a igreja;\n') +
+        (pendentes > 0
+          ? `• ${pendentes} rifa(s) ainda estão como "ainda vou receber" e continuam na aba ` +
+            'Vendas para você cobrar;\n'
+          : '') +
+        '\nIsso não dá para desfazer pelo app. Excluir mesmo assim?'
+      if (!confirm(texto)) return
     }
-    if (!confirm(`Excluir ${vendedor.nome}?`)) return
 
     setErro('')
+    setAviso('')
+    setOcupado(vendedor.id)
     try {
-      await removerVendedor(vendedor.id)
+      const comoFicou = await removerVendedor(vendedor.id)
+      if (comoFicou === 'removido') {
+        setAviso(
+          `${vendedor.nome} saiu da lista. As ${quantidade} rifa(s) que ele vendeu continuam ` +
+            'na aba Vendas e no sorteio.'
+        )
+      }
     } catch (e) {
       setErro(traduzirErro(e, 'Não foi possível excluir o vendedor.'))
+    } finally {
+      setOcupado('')
     }
   }
 
@@ -240,6 +275,11 @@ export default function AbaVendedores() {
       )}
 
       {erro && <p className="error-text">{erro}</p>}
+      {aviso && (
+        <p className="texto-ajuda" style={{ color: 'var(--good)' }}>
+          {aviso}
+        </p>
+      )}
 
       {vendedores.length === 0 ? (
         <EstadoVazio icone="👤">
@@ -322,7 +362,11 @@ export default function AbaVendedores() {
                   <button className="btn-ghost btn-sm" onClick={() => setEmEdicao(vendedor)}>
                     Editar
                   </button>
-                  <button className="btn-ghost btn-sm btn-danger" onClick={() => excluir(vendedor)}>
+                  <button
+                    className="btn-ghost btn-sm btn-danger"
+                    onClick={() => excluir(vendedor)}
+                    disabled={ocupado === vendedor.id}
+                  >
                     Excluir
                   </button>
                 </div>

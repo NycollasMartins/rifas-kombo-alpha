@@ -181,7 +181,8 @@ export default function AbaManutencao() {
             <option value="">Escolha…</option>
             {vendedores.map((v) => (
               <option key={v.id} value={v.id}>
-                {v.grupo} · {v.nome} ({vendas.filter((s) => s.vendedorId === v.id).length} rifas)
+                {`${v.grupo} · ${v.nome}${v.removido ? ' (excluído)' : ''} ` +
+                  `(${vendas.filter((s) => s.vendedorId === v.id).length} rifas)`}
               </option>
             ))}
           </select>
@@ -191,11 +192,13 @@ export default function AbaManutencao() {
           <label htmlFor="mt-para">Passar para</label>
           <select id="mt-para" value={para} onChange={(e) => setPara(e.target.value)}>
             <option value="">Escolha…</option>
-            {vendedores.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.grupo} · {v.nome}
-              </option>
-            ))}
+            {vendedores
+              .filter((v) => !v.removido)
+              .map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.grupo} · {v.nome}
+                </option>
+              ))}
           </select>
         </div>
 

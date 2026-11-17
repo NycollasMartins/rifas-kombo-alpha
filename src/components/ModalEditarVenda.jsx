@@ -92,10 +92,13 @@ export default function ModalEditarVenda({ venda, aoFechar }) {
         <label htmlFor="ev-vendedor">Vendedor</label>
         <select id="ev-vendedor" value={vendedorId} onChange={(e) => setVendedorId(e.target.value)}>
           {vendedores
-            .filter((v) => v.grupo === venda.grupo)
+            // quem foi excluído não recebe rifa nova, mas continua aparecendo
+            // se for o vendedor desta venda (senão o campo ficaria em branco)
+            .filter((v) => v.grupo === venda.grupo && (!v.removido || v.id === venda.vendedorId))
             .map((v) => (
               <option key={v.id} value={v.id}>
                 {v.nome}
+                {v.removido ? ' (excluído)' : ''}
               </option>
             ))}
         </select>

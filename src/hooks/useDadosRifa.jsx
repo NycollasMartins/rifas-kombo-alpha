@@ -229,13 +229,30 @@ export function ProvedorDadosRifa({ children }) {
       },
 
       async removerVendedor(id) {
-        await excluirVendedor(id)
+        const comoFicou = await excluirVendedor(id)
+        if (comoFicou === 'removido') {
+          // as rifas dele continuam: o cadastro fica (escondido das listas)
+          // só pra dar nome a elas
+          setTodosVendedores((a) => {
+            const atual = a.find((v) => v.id === id)
+            if (!atual) return a
+            return mesclar(a, {
+              ...atual,
+              situacao: 'desistiu',
+              removido: true,
+              removidoEm: new Date().toISOString(),
+              temSenha: false,
+            })
+          })
+          return comoFicou
+        }
         setTodosVendedores((a) => remover(a, id))
         setDadosPrivados((a) => {
           const copia = { ...a }
           delete copia[id]
           return copia
         })
+        return comoFicou
       },
 
       async salvarPrivadoDoVendedor(id, dados) {

@@ -97,7 +97,7 @@ export default function AbaPainel() {
           <div className={estilos.rotuloPequeno}>Rifas vendidas</div>
         </div>
         <div className={estilos.metrica}>
-          <div className={estilos.numero}>{vendedores.length}</div>
+          <div className={estilos.numero}>{vendedores.filter((v) => !v.removido).length}</div>
           <div className={estilos.rotuloPequeno}>Vendedores</div>
         </div>
         <div className={estilos.metrica}>

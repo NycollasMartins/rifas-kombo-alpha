@@ -208,16 +208,19 @@ alter table public.vendedores add constraint vendedores_situacao_check
 -- isso o e-mail deixa de ser único no sistema inteiro e passa a ser único
 -- por grupo.
 alter table public.vendedores drop constraint if exists vendedores_email_key;
-do $$
-begin
-  if not exists (select 1 from information_schema.table_constraints
-                 where table_schema = 'public' and table_name = 'vendedores'
-                   and constraint_name = 'vendedores_grupo_email_unico') then
-    alter table public.vendedores add constraint vendedores_grupo_email_unico
-      unique (grupo, email);
-  end if;
-end
-$$;
+
+-- Vendedor removido pela liderança (desistiu depois de já ter vendido).
+-- O cadastro NÃO é apagado: as rifas que ele vendeu continuam ligadas a ele
+-- (o comprador continua concorrendo e o nome de quem vendeu continua
+-- aparecendo nas vendas e no sorteio). Ele só some das listas e perde o
+-- acesso. Ver remover_vendedor() mais abaixo.
+alter table public.vendedores add column if not exists removido_em timestamptz;
+
+-- E-mail único por grupo, mas só entre quem NÃO foi removido: se a pessoa
+-- voltar depois, a liderança consegue cadastrar de novo com o mesmo e-mail.
+alter table public.vendedores drop constraint if exists vendedores_grupo_email_unico;
+create unique index if not exists vendedores_grupo_email_unico_ativo
+  on public.vendedores (grupo, email) where removido_em is null;
 
 -- ---- perfis: quem é quem depois de logar -----------------------------------
 --  dev      -> enxerga os dois grupos e corrige dados
@@ -631,14 +634,17 @@ begin
 
   select lower(email) into v_email from auth.users where id = auth.uid();
 
-  select count(*) into v_qtd from public.vendedores where lower(email) = v_email;
+  -- quem foi removido pela liderança não volta a ganhar acesso por aqui
+  select count(*) into v_qtd from public.vendedores
+   where lower(email) = v_email and removido_em is null;
   if v_qtd > 1 and p_grupo is null then
     raise exception 'Este e-mail tem cadastro em mais de um grupo.'
       using hint = 'Escolha de qual grupo você é vendedor(a) antes de continuar.';
   end if;
 
   select * into v_vendedor from public.vendedores
-   where lower(email) = v_email and (p_grupo is null or grupo = p_grupo);
+   where lower(email) = v_email and removido_em is null
+     and (p_grupo is null or grupo = p_grupo);
   if not found then
     raise exception 'Este e-mail não está cadastrado como vendedor.'
       using hint = 'Peça ao líder do seu grupo para cadastrar você com este mesmo e-mail.';
@@ -770,7 +776,10 @@ begin
 
   -- casa pelo e-mail DENTRO DESTE GRUPO — o mesmo e-mail pode já ter um
   -- cadastro no outro grupo (login único), e esse não entra na conta aqui
-  select * into v_vendedor from public.vendedores where lower(email) = v_email and grupo = p_grupo;
+  -- um cadastro removido pela liderança fica como está (com as rifas dele):
+  -- se a pessoa voltar pelo código, nasce um cadastro novo
+  select * into v_vendedor from public.vendedores
+   where lower(email) = v_email and grupo = p_grupo and removido_em is null;
 
   if found then
     if v_vendedor.user_id is not null and v_vendedor.user_id <> auth.uid() then
@@ -1511,9 +1520,77 @@ begin
     raise exception 'Não dá para transferir rifas entre grupos diferentes (a numeração é separada).';
   end if;
 
+  if v_dest.removido_em is not null then
+    raise exception 'Esse vendedor foi removido e não recebe rifas.';
+  end if;
+
   update public.vendas set vendedor_id = p_para where vendedor_id = p_de;
   get diagnostics v_total = row_count;
   return v_total;
+end;
+$$;
+
+/**
+ * Tira um vendedor do sistema.
+ *
+ *  - Sem nenhuma rifa: apaga o cadastro de vez (como sempre foi).
+ *  - Com rifas: NÃO apaga nada das vendas. O cadastro fica guardado só como
+ *    "quem vendeu", marcado como removido e como desistente (o dinheiro
+ *    dele vai para a igreja, regra que já existia). A pessoa some das
+ *    listas, perde o acesso ao app e para de receber notificações. As rifas
+ *    continuam com o mesmo número, no nome do comprador, e entram no
+ *    sorteio normalmente.
+ *
+ * Quem já fechou a meta não é removido por aqui: a vaga dele está paga.
+ * Se ele desistiu mesmo assim, a liderança marca "Desistiu" antes.
+ *
+ * Devolve 'excluido' (apagou) ou 'removido' (guardou com as rifas).
+ */
+create or replace function public.remover_vendedor(p_vendedor_id uuid)
+returns text
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_vendedor public.vendedores%rowtype;
+  v_qtd      integer;
+begin
+  -- trava a linha: uma venda registrada no mesmo instante espera esta
+  -- remoção terminar (e aí é recusada, porque o vendedor já desistiu)
+  select * into v_vendedor from public.vendedores where id = p_vendedor_id for update;
+  if not found then
+    raise exception 'Vendedor não encontrado. Talvez ele já tenha sido excluído.';
+  end if;
+  if not (public.e_lider() and public.posso_ver(v_vendedor.grupo)) then
+    raise exception 'Só a liderança do grupo pode excluir um vendedor.';
+  end if;
+  if v_vendedor.removido_em is not null then
+    return 'removido';
+  end if;
+
+  select count(*) into v_qtd from public.vendas where vendedor_id = p_vendedor_id;
+
+  if v_qtd = 0 then
+    delete from public.vendedores where id = p_vendedor_id;
+    return 'excluido';
+  end if;
+
+  if v_vendedor.situacao = 'quitou' then
+    raise exception '% já fechou a meta, então a vaga dele está paga.', v_vendedor.nome
+      using hint = 'Se ele desistiu mesmo assim, edite e marque a situação como "Desistiu" antes de excluir.';
+  end if;
+
+  update public.vendedores
+     set situacao = 'desistiu',
+         removido_em = now(),
+         user_id = null
+   where id = p_vendedor_id;
+
+  -- perde o acesso a ESTE cadastro (a conta de login continua existindo,
+  -- caso a mesma pessoa seja líder ou vendedor do outro grupo)
+  delete from public.perfis where vendedor_id = p_vendedor_id;
+  delete from public.inscricoes_push where vendedor_id = p_vendedor_id;
+
+  return 'removido';
 end;
 $$;
 
@@ -1962,6 +2039,7 @@ revoke all on function public.completar_minha_venda(uuid, text, text, text)     
 revoke all on function public.fechar_meta_do_vendedor(uuid, text)                   from public, anon;
 revoke all on function public.transferir_vendas(uuid, uuid)                         from public, anon;
 revoke all on function public.apagar_dados_do_grupo(text)                           from public, anon;
+revoke all on function public.remover_vendedor(uuid)                               from public, anon;
 revoke all on function public.forcar_reenvio_webhooks()                             from public, anon;
 revoke all on function public.salvar_inscricao_push(uuid, text, text, text)          from public, anon;
 -- só o job agendado (dono do banco) chama; ninguém de fora precisa disparar
@@ -1981,6 +2059,7 @@ grant execute on function public.completar_minha_venda(uuid, text, text, text)  
 grant execute on function public.fechar_meta_do_vendedor(uuid, text)                   to authenticated;
 grant execute on function public.transferir_vendas(uuid, uuid)                         to authenticated;
 grant execute on function public.apagar_dados_do_grupo(text)                           to authenticated;
+grant execute on function public.remover_vendedor(uuid)                               to authenticated;
 grant execute on function public.forcar_reenvio_webhooks()                             to authenticated;
 grant execute on function public.salvar_inscricao_push(uuid, text, text, text)          to authenticated;
 grant execute on function public.meu_papel(text, text), public.meu_grupo(text, text), public.e_dev(text, text),
